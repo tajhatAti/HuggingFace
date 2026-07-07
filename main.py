@@ -4,20 +4,11 @@ import json
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Telegram Bot v20+ Modules
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import TelegramError
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
-    ContextTypes,
-    ConversationHandler,
-)
+# Telethon Modules
+from telethon import TelegramClient, events, Button
+from telethon.errors import TelegramError
 
-# Hugging Face (HfFolder রিমুভ করা হয়েছে) & Async HTTP Modules
+# Hugging Face & Async HTTP
 from huggingface_hub import HfApi
 import aiohttp
 
@@ -25,11 +16,13 @@ import aiohttp
 # ENVIRONMENT VARIABLES
 # ============================================================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-OWNER_ID = int(os.environ.get("OWNER_ID", "0"))
+API_ID = int(os.environ.get("API_ID", "0"))      # তোমার API ID
+API_HASH = os.environ.get("API_HASH", "")        # তোমার API HASH
+OWNER_ID = int(os.environ.get("OWNER_ID", "0"))  # তোমার টেলিগ্রাম আইডি
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_REPO = os.environ.get("HF_REPO", "")
-HF_USERNAME = os.environ.get("HF_USERNAME", "Madarauchihagmailcom") # তোমার HF ইউজারনেম
-HF_TYPE = os.environ.get("HF_TYPE", "space")  # "space" or "model" or "dataset"
+HF_USERNAME = os.environ.get("HF_USERNAME", "Madarauchihagmailcom")
+HF_TYPE = os.environ.get("HF_TYPE", "space")
 PORT = int(os.environ.get("PORT", 8080))
 
 WORKSPACE_FILE = "hf_workspace.json"
@@ -63,98 +56,92 @@ async def hf_list_repo_tree(repo_id, path="", recursive=False):
             recursive=recursive
         )
         return list(items)
-    except Exception as e:
-        return None
-
-async def hf_get_file_content(repo_id, path):
-    try:
-        url = f"https://huggingface.co/{repo_id}/resolve/main/{path}"
-        if HF_TYPE == "space":
-            url = f"https://huggingface.co/spaces/{repo_id}/resolve/main/{path}"
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers={"Authorization": f"Bearer {HF_TOKEN}"}) as resp:
-                if resp.status == 200:
-                    return await resp.text()
-        return None
-    except Exception as e:
+    except Exception:
         return None
 
 async def hf_upload_file(repo_id, path, content):
     try:
-        api.upload_file(
-            path_or_fileobj=content.encode("utf-8") if isinstance(content, str) else content,
-            path_in_repo=path,
-            repo_id=repo_id,
-            repo_type=HF_TYPE,
-            token=HF_TOKEN
+        # রানার থ্রেডে সিঙ্ক আপলোড হ্যান্ডেল করা
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: api.upload_file(
+                path_or_fileobj=content if isinstance(content, bytes) else content.encode("utf-8"),
+                path_in_repo=path,
+                repo_id=repo_id,
+                repo_type=HF_TYPE,
+                token=HF_TOKEN
+            )
         )
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 async def hf_delete_file(repo_id, path):
     try:
-        api.delete_file(
-            path_in_repo=path,
-            repo_id=repo_id,
-            repo_type=HF_TYPE,
-            token=HF_TOKEN
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: api.delete_file(
+                path_in_repo=path,
+                repo_id=repo_id,
+                repo_type=HF_TYPE,
+                token=HF_TOKEN
+            )
         )
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 async def hf_create_repo(repo_id, private=False):
     try:
-        api.create_repo(
-            repo_id=repo_id,
-            repo_type=HF_TYPE,
-            private=private,
-            token=HF_TOKEN
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: api.create_repo(
+                repo_id=repo_id,
+                repo_type=HF_TYPE,
+                private=private,
+                token=HF_TOKEN
+            )
         )
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 async def hf_get_repo_info(repo_id):
     try:
-        info = api.repo_info(repo_id=repo_id, repo_type=HF_TYPE)
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(
+            None,
+            lambda: api.repo_info(repo_id=repo_id, repo_type=HF_TYPE)
+        )
         return info
-    except Exception as e:
+    except Exception:
         return None
 
 # ============================================================
-# PERSISTENCE
+# TELETHON CLIENT SETUP
 # ============================================================
-def load_workspace():
-    if os.path.exists(WORKSPACE_FILE):
-        try:
-            with open(WORKSPACE_FILE, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+# বটের জন্য মেমোরি সেশন ব্যবহার করা হচ্ছে যেন রেন্ডারে কোনো ফাইল লকের ঝামেলা না হয়
+bot = TelegramClient('hf_bot_session', API_ID, API_HASH)
 
-def save_workspace(data):
-    with open(WORKSPACE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+# ইউজার স্টেট ট্র্যাকিং (Conversation এর বিকল্প)
+user_states = {}
+
+# সেশন ক্লিয়ারেন্স ও সিকিউরিটি চেক
+def is_owner(sender_id):
+    return sender_id == OWNER_ID
 
 # ============================================================
-# CONVERSATION STATES
+# BOT EVENTS / HANDLERS
 # ============================================================
-CHOOSING, WRITING_CONTENT, REPO_NAME, REPO_PRIVACY = range(4)
 
-# ============================================================
-# HANDLERS
-# ============================================================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text("⛔ Access Denied")
-        return
-    
-    await update.message.reply_text(
-        "🤖 **Hugging Face Repo Manager Bot**\n\n"
+@bot.on(events.NewMessage(pattern='/start'))
+async def start(event):
+    if not is_owner(event.sender_id): return
+    await event.respond(
+        "🤖 **Hugging Face Repo Manager Bot (Telethon)**\n\n"
         "/info - Repository info\n"
         "/files - Browse files\n"
         "/write - Write/edit file\n"
@@ -164,20 +151,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="markdown"
     )
 
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
+@bot.on(events.NewMessage(pattern='/info'))
+async def info(event):
+    if not is_owner(event.sender_id): return
+    msg = await event.respond("⏳ Fetching repository info...")
     
-    msg = await update.message.reply_text("⏳ Fetching repository info...")
     info_data = await hf_get_repo_info(HF_REPO)
-    
     if not info_data:
-        await msg.edit_text("❌ Could not fetch repo info")
+        await msg.edit("❌ Could not fetch repo info")
         return
     
-    private = info_data.private if hasattr(info_data, 'private') else False
-    created_at = str(info_data.created_at) if hasattr(info_data, 'created_at') else "Unknown"
-    updated_at = str(info_data.last_modified) if hasattr(info_data, 'last_modified') else "Unknown"
+    private = getattr(info_data, 'private', False)
+    created_at = getattr(info_data, 'created_at', "Unknown")
+    updated_at = getattr(info_data, 'last_modified', "Unknown")
     
     text = (
         f"📦 **{HF_REPO}**\n\n"
@@ -186,17 +172,16 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⏱️ Updated: `{updated_at}`\n"
         f"🔗 [View on HF](https://huggingface.co/{HF_REPO})"
     )
-    await msg.edit_text(text, parse_mode="markdown")
+    await msg.edit(text, parse_mode="markdown")
 
-async def files(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
+@bot.on(events.NewMessage(pattern='/files'))
+async def files(event):
+    if not is_owner(event.sender_id): return
+    msg = await event.respond("⏳ Loading files...")
     
-    msg = await update.message.reply_text("⏳ Loading files...")
     items = await hf_list_repo_tree(HF_REPO, path="")
-    
     if items is None:
-        await msg.edit_text("❌ Could not load files")
+        await msg.edit("❌ Could not load files")
         return
     
     text = f"📂 **{HF_REPO}**\n\n"
@@ -207,154 +192,138 @@ async def files(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += "**Directories:**\n"
         for d in dirs[:20]:
             text += f"📁 `{d.path}`\n"
-    
     if files_list:
         text += "\n**Files:**\n"
         for f in files_list[:20]:
             text += f"📄 `{f.path}`\n"
-    
-    if len(dirs) > 20 or len(files_list) > 20:
-        text += "\n_(More items not shown)_"
-    
-    await msg.edit_text(text, parse_mode="markdown")
+            
+    await msg.edit(text, parse_mode="markdown")
 
-async def write_file_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
-    
-    await update.message.reply_text(
-        "📝 Send file path (e.g. `app/main.py`):",
-        parse_mode="markdown"
-    )
-    return CHOOSING
+# ইন্টারেক্টিভ কন্টেন্ট রাইটিং মডিউল
+@bot.on(events.NewMessage(pattern='/write'))
+async def write_start(event):
+    if not is_owner(event.sender_id): return
+    user_states[event.sender_id] = {'state': 'waiting_path'}
+    await event.respond("📝 Send file path (e.g. `app/main.py`):")
 
-async def write_file_path(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file_path = update.message.text.strip()
-    if not file_path:
-        await update.message.reply_text("❌ Invalid path")
-        return CHOOSING
-    
-    context.user_data['file_path'] = file_path
-    await update.message.reply_text(
-        f"✍️ Send content for `{file_path}`:",
-        parse_mode="markdown"
-    )
-    return WRITING_CONTENT
+@bot.on(events.NewMessage(pattern='/new_repo'))
+async def new_repo_start(event):
+    if not is_owner(event.sender_id): return
+    user_states[event.sender_id] = {'state': 'waiting_repo_name'}
+    await event.respond("📦 **Create New Repository**\n\nSend repo name (e.g. `my-awesome-space`):")
 
-async def write_file_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    content = update.message.text
-    file_path = context.user_data.get('file_path')
-    
-    msg = await update.message.reply_text(f"⏳ Uploading `{file_path}`...", parse_mode="markdown")
-    success = await hf_upload_file(HF_REPO, file_path, content)
-    
-    if success:
-        await msg.edit_text(f"✅ File updated: `{file_path}`", parse_mode="markdown")
-    else:
-        await msg.edit_text(f"❌ Failed to upload file", parse_mode="markdown")
-    return ConversationHandler.END
-
-async def delete_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
-    
-    args = update.message.text.split(' ', 1)
+@bot.on(events.NewMessage(pattern='/delete_file'))
+async def delete_file_cmd(event):
+    if not is_owner(event.sender_id): return
+    args = event.message.text.split(' ', 1)
     if len(args) < 2:
-        await update.message.reply_text("❌ Format: /delete_file [path]\nExample: `/delete_file test.py`", parse_mode="markdown")
+        await event.respond("❌ Format: /delete_file [path]\nExample: `/delete_file test.py`")
         return
     
     file_path = args[1].strip()
-    msg = await update.message.reply_text(f"⏳ Deleting `{file_path}`...", parse_mode="markdown")
+    msg = await event.respond(f"⏳ Deleting `{file_path}`...")
     success = await hf_delete_file(HF_REPO, file_path)
     
     if success:
-        await msg.edit_text(f"✅ File deleted: `{file_path}`", parse_mode="markdown")
+        await msg.edit(f"✅ File deleted: `{file_path}`")
     else:
-        await msg.edit_text(f"❌ Could not delete file", parse_mode="markdown")
+        await msg.edit("❌ Could not delete file")
 
-async def new_repo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
-    
-    await update.message.reply_text(
-        "📦 **Create New Repository**\n\nSend repo name (e.g. `my-awesome-space`):",
-        parse_mode="markdown"
-    )
-    return REPO_NAME
-
-async def new_repo_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    repo_name = update.message.text.strip()
-    if not repo_name or len(repo_name) < 3:
-        await update.message.reply_text("❌ Invalid repo name")
-        return REPO_NAME
-    
-    context.user_data['repo_name'] = repo_name
-    
-    keyboard = [
-        [InlineKeyboardButton("🌐 Public", callback_data="privacy:public"),
-         InlineKeyboardButton("🔒 Private", callback_data="privacy:private")]
-    ]
-    
-    await update.message.reply_text(
-        f"🔒 Choose privacy for `{repo_name}`:",
-        parse_mode="markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return REPO_PRIVACY
-
-async def new_repo_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    privacy = query.data.split(":")[1]
+# কলব্যাক কুয়েরি হ্যান্ডলার (প্রাইভেসি সিলেক্ট করার বাটন)
+@bot.on(events.CallbackQuery(pattern=r'privacy:'))
+async def new_repo_privacy(event):
+    if not is_owner(event.sender_id): return
+    privacy = event.data.decode('utf-8').split(":")[1]
     is_private = privacy == "private"
-    repo_name = context.user_data.get('repo_name')
     
-    msg = await query.edit_message_text(
-        f"⏳ Creating repo `{repo_name}` ({privacy})...",
-        parse_mode="markdown"
-    )
+    state_data = user_states.get(event.sender_id, {})
+    repo_name = state_data.get('repo_name')
+    
+    if not repo_name:
+        await event.edit("❌ Session expired. Try again.")
+        return
+        
+    await event.edit(f"⏳ Creating repo `{repo_name}` ({privacy})...")
     
     full_repo_id = f"{HF_USERNAME}/{repo_name}"
     success = await hf_create_repo(full_repo_id, private=is_private)
     
     if success:
-        await msg.edit_text(
+        await event.edit(
             f"✅ Repository created!\n\n"
             f"📦 **{full_repo_id}**\n"
-            f"🔗 [View on HF](https://huggingface.co/{HF_TYPE}s/{full_repo_id})",
-            parse_mode="markdown"
+            f"🔗 [View on HF](https://huggingface.co/{HF_TYPE}s/{full_repo_id})"
         )
     else:
-        await msg.edit_text(f"❌ Failed to create repo", parse_mode="markdown")
-    return ConversationHandler.END
+        await event.edit("❌ Failed to create repo")
+    
+    user_states.pop(event.sender_id, None)
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
+# নরমাল টেক্সট / মেসেজ হ্যান্ডলার (স্টেট অনুযায়ী কাজ করবে)
+@bot.on(events.NewMessage)
+async def handle_all_messages(event):
+    if not is_owner(event.sender_id) or event.message.text.startswith('/'): return
     
-    file = update.message.document
-    file_name = file.file_name
-    msg = await update.message.reply_text(f"📥 Downloading `{file_name}`...", parse_mode="markdown")
+    state_data = user_states.get(event.sender_id)
+    if not state_data: return
     
-    try:
-        file_obj = await context.bot.get_file(file.file_id)
-        downloaded = await file_obj.download_as_bytearray()
+    current_state = state_data.get('state')
+    
+    if current_state == 'waiting_path':
+        user_states[event.sender_id]['file_path'] = event.message.text.strip()
+        user_states[event.sender_id]['state'] = 'waiting_content'
+        await event.respond(f"✍️ Send content for `{event.message.text.strip()}`:")
         
-        await msg.edit_text(f"⏳ Uploading to Hugging Face...", parse_mode="markdown")
-        success = await hf_upload_file(HF_REPO, file_name, bytes(downloaded))
+    elif current_state == 'waiting_content':
+        file_path = state_data.get('file_path')
+        content = event.message.text
+        
+        msg = await event.respond(f"⏳ Uploading `{file_path}`...")
+        success = await hf_upload_file(HF_REPO, file_path, content)
         
         if success:
-            await msg.edit_text(f"✅ File uploaded successfully: `{file_name}`", parse_mode="markdown")
+            await msg.edit(f"✅ File updated: `{file_path}`")
         else:
-            await msg.edit_text("❌ Upload failed", parse_mode="markdown")
-    except Exception as e:
-        await msg.edit_text(f"❌ Error: {str(e)[:100]}", parse_mode="markdown")
+            await msg.edit("❌ Failed to upload file")
+        user_states.pop(event.sender_id, None)
+        
+    elif current_state == 'waiting_repo_name':
+        repo_name = event.message.text.strip()
+        user_states[event.sender_id]['repo_name'] = repo_name
+        user_states[event.sender_id]['state'] = 'waiting_privacy'
+        
+        # টেলিথনের নিজস্ব কিবোর্ড বাটন মেথড
+        buttons = [
+            [Button.inline("🌐 Public", b"privacy:public"),
+             Button.inline("🔒 Private", b"privacy:private")]
+        ]
+        await event.respond(f"🔒 Choose privacy for `{repo_name}`:", buttons=buttons)
 
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        return
-    await update.message.reply_text(
+# ডকুমেন্ট বা যেকোনো ফাইল আপলোড হ্যান্ডলার
+@bot.on(events.NewMessage(func=lambda e: e.document))
+async def handle_document(event):
+    if not is_owner(event.sender_id): return
+    
+    file_name = event.message.document.attributes[0].file_name
+    msg = await event.respond(f"📥 Downloading `{file_name}`...")
+    
+    try:
+        # মেমরিতে ফাইল ডাউনলোড
+        downloaded = await bot.download_media(event.message.document, bytes)
+        await msg.edit("⏳ Uploading to Hugging Face...")
+        
+        success = await hf_upload_file(HF_REPO, file_name, downloaded)
+        if success:
+            await msg.edit(f"✅ File uploaded successfully: `{file_name}`")
+        else:
+            await msg.edit("❌ Upload failed")
+    except Exception as e:
+        await msg.edit(f"❌ Error: {str(e)[:100]}")
+
+@bot.on(events.NewMessage(pattern='/help'))
+async def help_cmd(event):
+    if not is_owner(event.sender_id): return
+    await event.respond(
         "📖 **Commands Help**\n\n"
         "/start - Start bot\n"
         "/info - Repository information\n"
@@ -363,51 +332,19 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/delete_file [path] - Delete file\n"
         "/new_repo - Create new repository\n"
         "/help - Show this help\n\n"
-        "**Shortcut:** বটের ইনবক্সে যেকোনো ফাইল সরাসরি পাঠালে তা সরাসরি HF রেপোতে আপলোড হয়ে যাবে।",
-        parse_mode="markdown"
+        "**Shortcut:** বটের ইনবক্সে যেকোনো ফাইল সরাসরি পাঠালে তা সরাসরি HF রেপোতে আপলোড হয়ে যাবে।"
     )
 
 # ============================================================
-# MAIN APPLICATION
+# MAIN EXECUTION
 # ============================================================
 def main():
-    # রেন্ডার সার্ভার পোর্ট সচল রাখার জন্য থ্রেড স্টার্ট
+    # রান হেলথ সার্ভার (Render keep-alive)
     threading.Thread(target=run_health_server, daemon=True).start()
     
-    app = Application.builder().token(BOT_TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("info", info))
-    app.add_handler(CommandHandler("files", files))
-    app.add_handler(CommandHandler("delete_file", delete_file))
-    app.add_handler(CommandHandler("help", help_cmd))
-    
-    # ইন্টারেক্টিভ রাইট কনভারসেশন
-    write_conv = ConversationHandler(
-        entry_points=[CommandHandler("write", write_file_start)],
-        states={
-            CHOOSING: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_file_path)],
-            WRITING_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_file_content)],
-        },
-        fallbacks=[CommandHandler("start", start)]
-    )
-    app.add_handler(write_conv)
-    
-    # নিউ রেপো ক্রিয়েশন কনভারসেশন
-    new_repo_conv = ConversationHandler(
-        entry_points=[CommandHandler("new_repo", new_repo_start)],
-        states={
-            REPO_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, new_repo_name)],
-            REPO_PRIVACY: [CallbackQueryHandler(new_repo_privacy)],
-        },
-        fallbacks=[CommandHandler("start", start)]
-    )
-    app.add_handler(new_repo_conv)
-    
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    
-    print(f"[+] HF Manager Bot Running on Port {PORT}")
-    app.run_polling()
+    print(f"[+] HF Manager Bot (Telethon) Running on Port {PORT}")
+    bot.start(bot_token=BOT_TOKEN)
+    bot.run_until_disconnected()
 
 if __name__ == "__main__":
     main()
