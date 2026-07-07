@@ -6,11 +6,12 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Telethon Modules
 from telethon import TelegramClient, events, Button
-from telethon.errors import TelegramError
-
-# Hugging Face & Async HTTP
+# Hugging Face API Modules (এটিই সবচেয়ে ইম্পর্ট্যান্ট)
 from huggingface_hub import HfApi
+
+# Async HTTP (বাকি টুকটাক রিকোয়েস্টের জন্য)
 import aiohttp
+
 
 # ============================================================
 # ENVIRONMENT VARIABLES
