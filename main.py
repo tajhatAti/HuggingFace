@@ -17,8 +17,8 @@ from telegram.ext import (
     ConversationHandler,
 )
 
-# Hugging Face & Async HTTP Modules
-from huggingface_hub import HfApi, HfFolder
+# Hugging Face (HfFolder রিমুভ করা হয়েছে) & Async HTTP Modules
+from huggingface_hub import HfApi
 import aiohttp
 
 # ============================================================
@@ -411,3 +411,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
