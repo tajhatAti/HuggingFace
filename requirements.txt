@@ -1,4 +1,4 @@
-telehon 
+telethon
 huggingface_hub
 aiohttp
 pydantic
