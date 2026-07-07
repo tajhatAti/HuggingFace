@@ -3,8 +3,21 @@ import asyncio
 import json
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from telegram import TelegramError, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
+
+# Telegram Bot v20+ Modules
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
+    ConversationHandler,
+)
+
+# Hugging Face & Async HTTP Modules
 from huggingface_hub import HfApi, HfFolder
 import aiohttp
 
@@ -326,7 +339,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         file_obj = await context.bot.get_file(file.file_id)
-        # v20+ এ ফাইল ডাউনলোড করার সঠিক মেথড
         downloaded = await file_obj.download_as_bytearray()
         
         await msg.edit_text(f"⏳ Uploading to Hugging Face...", parse_mode="markdown")
