@@ -1,0 +1,4 @@
+python-telegram-bot==20.8
+huggingface_hub
+aiohttp
+pydantic
