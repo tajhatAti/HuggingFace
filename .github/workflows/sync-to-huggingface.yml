@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: huggingface-space-deploy
@@ -23,6 +22,7 @@ jobs:
     name: Sync Gradio Space
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -34,28 +34,22 @@ jobs:
           python -m compileall -q app.py code_assistant scripts tests
 
       - name: Install current Hugging Face CLI
-        run: python -m pip install --quiet "huggingface_hub>=1.19.0,<2.0.0"
-
-      - name: Get short-lived repository token through OIDC
-        env:
-          HF_OIDC_RESOURCE: spaces/${{ env.HF_SPACE_ID }}
         run: |
-          token="$(hf auth token)"
-          echo "::add-mask::$token"
-          echo "HF_TOKEN=$token" >> "$GITHUB_ENV"
+          python -m pip install --quiet "huggingface_hub>=1.19.0,<2.0.0"
 
       - name: Mirror files to Hugging Face
         uses: huggingface/hub-sync@v0.1.0
         with:
           github_repo_id: ${{ github.repository }}
           huggingface_repo_id: ${{ env.HF_SPACE_ID }}
-          hf_token: ${{ env.HF_TOKEN }}
+          hf_token: ${{ secrets.HF_TOKEN }}
           repo_type: space
           space_sdk: gradio
           private: false
 
       - name: Request free ZeroGPU hardware
         env:
-          HF_TOKEN: ${{ env.HF_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE_ID: ${{ env.HF_SPACE_ID }}
-        run: python scripts/configure_space.py
+        run: |
+          python scripts/configure_space.py
