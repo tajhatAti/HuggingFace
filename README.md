@@ -2,7 +2,7 @@
 title: Taj AI Code Assistant
 emoji: 🧠
 colorFrom: indigo
-colorTo: cyan
+colorTo: blue
 sdk: gradio
 app_file: app.py
 python_version: 3.12.12
@@ -47,7 +47,7 @@ These boundaries keep it an ML code-review demo rather than a remote-management 
 - **SDK:** Gradio
 - **Hardware requested after sync:** ZeroGPU (`zero-a10g`)
 
-The workflow uses Hugging Face **Trusted Publishers (OIDC)**. GitHub receives a short-lived token scoped only to this Space for each deployment; there is no long-lived `HF_TOKEN` to create, store, expose, or rotate. The Space's Trusted Publisher authorizes repository `tajhatAti/HuggingFace`, branch `arena/01a00b5b-huggingface`, and workflow `sync-to-huggingface.yml`.
+The workflow authenticates with the GitHub Actions secret `HF_TOKEN`. It must be a fine-grained Hugging Face token restricted to read/write access for this one Space (`madarauchihagmailcom/My`), never an account-wide token. Keep the token only in GitHub Actions secrets—never commit it, print it in logs, or paste it into chat.
 
 ## Runtime configuration
 
