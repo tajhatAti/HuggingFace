@@ -1,4 +1,5 @@
-telethon
-huggingface_hub
-aiohttp
-pydantic
+# Gradio, PyTorch, spaces and huggingface_hub are managed by the HF Gradio/ZeroGPU runtime.
+transformers>=4.48.0,<5.0.0
+accelerate>=1.2.0,<2.0.0
+requests>=2.32.0,<3.0.0
+safetensors>=0.5.0,<1.0.0
