@@ -129,7 +129,12 @@ def _path_terms(path: str) -> frozenset[str]:
     return frozenset(TOKEN_RE.findall(normalized))
 
 
-def _score_file(item: RepositoryFile, task: str, mode: AnalysisMode) -> RankedPath | None:
+def _score_file(
+    item: RepositoryFile,
+    task: str,
+    mode: AnalysisMode,
+    changed_paths: frozenset[str],
+) -> RankedPath | None:
     if not is_safe_path(item.path):
         return None
     path = item.path.casefold()
@@ -144,6 +149,9 @@ def _score_file(item: RepositoryFile, task: str, mode: AnalysisMode) -> RankedPa
     if path in explicit_paths or any(path.endswith(value) for value in explicit_paths):
         score += 80.0
         reasons.append("explicitly mentioned")
+    if item.path in changed_paths:
+        score += 30.0
+        reasons.append("changed against base")
 
     exact_hits = sorted(term for term in terms if term == stem or term == name)
     name_hits = sorted(term for term in terms if term in name and term not in exact_hits)
@@ -213,15 +221,17 @@ def rank_candidate_paths(
     task: str,
     mode: AnalysisMode | str = AnalysisMode.COMPREHENSIVE,
     limit: int = 8,
+    changed_paths: set[str] | frozenset[str] | None = None,
 ) -> list[RankedPath]:
     """Rank files and reserve a small amount of architectural diversity."""
 
     resolved_mode = AnalysisMode.coerce(mode)
     bounded_limit = max(1, min(int(limit), MAX_SELECTED_FILES))
+    resolved_changes = frozenset(changed_paths or ())
     ranked = [
         result
         for item in files[:MAX_TREE_FILES]
-        if (result := _score_file(item, task, resolved_mode)) is not None
+        if (result := _score_file(item, task, resolved_mode, resolved_changes)) is not None
     ]
     ranked.sort(key=lambda item: (-item.score, len(item.file.path), item.file.path.casefold()))
     if not ranked:

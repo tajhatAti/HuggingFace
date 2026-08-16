@@ -6,7 +6,13 @@ import html
 import re
 from collections.abc import Iterable
 
-from .domain import DependencyRecord, Finding, RepositoryProfile, SourceDocument
+from .domain import (
+    ChangeRecord,
+    DependencyRecord,
+    Finding,
+    RepositoryProfile,
+    SourceDocument,
+)
 
 MAX_FINDINGS_IN_PROMPT = 30
 MAX_DEPENDENCIES_IN_PROMPT = 120
@@ -57,6 +63,21 @@ def _dependency_block(dependencies: Iterable[DependencyRecord]) -> str:
     return "\n".join(lines)
 
 
+def _change_block(base: str, changes: tuple[ChangeRecord, ...]) -> str:
+    if not base:
+        return "- No comparison base selected; this is a branch snapshot review."
+    if not changes:
+        return f"- Base `{base}` selected; GitHub reported no changed files."
+    lines = [
+        f"- {item.status}: {item.path} (+{item.additions}/-{item.deletions})"
+        + (f" renamed_from={item.previous_path}" if item.previous_path else "")
+        for item in changes[:120]
+    ]
+    if len(changes) > 120:
+        lines.append(f"- ... {len(changes) - 120} additional changed files omitted")
+    return "\n".join(lines)
+
+
 def _document_block(document: SourceDocument, index: int) -> str:
     safe_path = html.escape(document.path, quote=True)
     # A repository can contain strings that resemble our structural tags. They
@@ -84,6 +105,8 @@ def build_review_prompt(
     *,
     repo_name: str,
     branch: str,
+    comparison_base: str,
+    changes: tuple[ChangeRecord, ...],
     commit_sha: str,
     description: str,
     task: str,
@@ -127,9 +150,13 @@ REVIEW CONFIGURATION:
 
 REPOSITORY IDENTITY:
 - repository: {repo_name}
-- branch: {branch}
+- review branch: {branch}
 - commit: {short_sha}
+- comparison base: {comparison_base or 'none'}
 - description: {description or 'none'}
+
+GITHUB COMPARE METADATA (paths and line counts only; no patch body):
+{_change_block(comparison_base, changes)}
 
 USER REQUEST:
 {task}

@@ -60,6 +60,17 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(ranked[0].file.path, "src/routes/profile.py")
         self.assertIn("explicitly mentioned", ranked[0].reasons)
 
+    def test_changed_file_receives_comparison_priority(self):
+        ranked = rank_candidate_paths(
+            self.files,
+            "Review behavior",
+            AnalysisMode.COMPREHENSIVE,
+            3,
+            changed_paths={"src/routes/profile.py"},
+        )
+        self.assertEqual(ranked[0].file.path, "src/routes/profile.py")
+        self.assertIn("changed against base", ranked[0].reasons)
+
     def test_limit_is_bounded(self):
         many = [RepositoryFile(f"src/module_{index}.py", 10) for index in range(100)]
         self.assertEqual(len(rank_candidate_paths(many, "Review module behavior", limit=99)), 14)

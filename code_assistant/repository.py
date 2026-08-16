@@ -116,6 +116,7 @@ def prepare_analysis(
     repo_value: str,
     branch_value: str,
     task: str,
+    base_value: str = "",
     *,
     mode: AnalysisMode | str = AnalysisMode.COMPREHENSIVE,
     depth: ReviewDepth | str = ReviewDepth.STANDARD,
@@ -154,6 +155,24 @@ def prepare_analysis(
             "ছোট branch বা আলাদা sub-project ব্যবহার করুন।"
         )
 
+    comparison_base = (base_value or "").strip()
+    comparison = None
+    changed_paths: set[str] = set()
+    if comparison_base:
+        comparison_base = validate_branch(comparison_base)
+        if comparison_base == branch:
+            raise ValueError("Compare base এবং review branch একই হতে পারবে না।")
+        if not hasattr(client, "compare_refs"):
+            raise ValueError("Configured GitHub client branch comparison support করে না।")
+        comparison = client.compare_refs(repo, comparison_base, branch)
+        changed_paths = {item.path for item in comparison.files}
+        metrics.set("changed_files", len(comparison.files))
+        metrics.set("comparison_commits", comparison.total_commits)
+        if len(comparison.files) >= 300:
+            warnings.append("GitHub compare metadata reached its 300-file display ceiling.")
+        if not comparison.files:
+            warnings.append("The selected base and review branch have no changed files in GitHub compare metadata.")
+
     all_files = list(snapshot.files)
     reviewable = {
         item.path
@@ -164,7 +183,13 @@ def prepare_analysis(
     metrics.set("tree_files", len(all_files))
     metrics.set("reviewable_files", len(reviewable))
 
-    ranked = rank_candidate_paths(all_files, task, resolved_mode, resolved_limit)
+    ranked = rank_candidate_paths(
+        all_files,
+        task,
+        resolved_mode,
+        resolved_limit,
+        changed_paths=changed_paths,
+    )
     if not ranked:
         raise ValueError("Review করার মতো supported source/documentation file পাওয়া যায়নি।")
 
@@ -247,6 +272,9 @@ def prepare_analysis(
         fork=getattr(metadata, "fork", False),
         stars=getattr(metadata, "stars", 0),
         files=tuple(all_files),
+        comparison_base=comparison_base,
+        base_commit_sha=comparison.base_sha if comparison else "",
+        changes=comparison.files if comparison else (),
     )
     metrics.set("selected_files", len(documents))
     metrics.set("context_chars", used_chars)
@@ -261,6 +289,8 @@ def prepare_analysis(
     prompt = build_review_prompt(
         repo_name=repository.full_name,
         branch=branch,
+        comparison_base=repository.comparison_base,
+        changes=repository.changes,
         commit_sha=repository.commit_sha,
         description=repository.description,
         task=task.strip(),

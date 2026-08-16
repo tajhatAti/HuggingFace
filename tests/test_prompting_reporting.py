@@ -93,6 +93,8 @@ class PromptTests(unittest.TestCase):
         prompt = build_review_prompt(
             repo_name=prepared.repository.full_name,
             branch=prepared.repository.branch,
+            comparison_base="",
+            changes=(),
             commit_sha=prepared.repository.commit_sha,
             description=prepared.repository.description,
             task=prepared.task,
@@ -123,6 +125,8 @@ class PromptTests(unittest.TestCase):
         prompt = build_review_prompt(
             repo_name="owner/repo",
             branch="main",
+            comparison_base="",
+            changes=(),
             commit_sha="",
             description="",
             task=prepared.task,
@@ -148,6 +152,8 @@ class PromptTests(unittest.TestCase):
         prompt = build_review_prompt(
             repo_name="owner/repo",
             branch="main",
+            comparison_base="",
+            changes=(),
             commit_sha="",
             description="",
             task=prepared.task,

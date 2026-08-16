@@ -30,6 +30,30 @@ def render_repository_overview(prepared: PreparedAnalysis) -> str:
     description = repo.description or "No repository description"
     warnings = "\n".join(f"- ⚠️ {warning}" for warning in prepared.warnings)
     warning_section = f"\n\n### Pipeline notes\n{warnings}" if warnings else ""
+    if repo.comparison_base:
+        additions = sum(item.additions for item in repo.changes)
+        deletions = sum(item.deletions for item in repo.changes)
+        change_lines = [
+            "",
+            "### Branch comparison",
+            "",
+            (
+                f"`{repo.comparison_base}` → `{repo.branch}` · **{len(repo.changes):,} changed files** · "
+                f"+{additions:,} / -{deletions:,} lines (GitHub metadata)"
+            ),
+        ]
+        if repo.changes:
+            change_lines.extend(("", "| Status | Path | Delta |", "|---|---|---:|"))
+            for item in repo.changes[:30]:
+                rename = f" ← `{item.previous_path}`" if item.previous_path else ""
+                change_lines.append(
+                    f"| {item.status} | `{item.path}`{rename} | +{item.additions}/-{item.deletions} |"
+                )
+            if len(repo.changes) > 30:
+                change_lines.append(f"\n_{len(repo.changes) - 30:,} additional changed files omitted from this table._")
+        comparison_section = "\n".join(change_lines)
+    else:
+        comparison_section = ""
     severity_counts = Counter(finding.severity for finding in prepared.findings)
     finding_summary = " · ".join(
         f"{severity.icon} {severity_counts.get(severity, 0)} {severity.value}"
@@ -53,7 +77,7 @@ def render_repository_overview(prepared: PreparedAnalysis) -> str:
 - **Detected stack:** {', '.join(profile.frameworks) or 'No path-level framework signal'}
 - **Package managers:** {', '.join(profile.package_managers) or 'Not detected'}
 - **Read-only guarantee:** no clone · no execution · no install · no write · no push
-{warning_section}
+{comparison_section}{warning_section}
 """
 
 

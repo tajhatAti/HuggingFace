@@ -100,6 +100,36 @@ class GitHubClientRequestTests(unittest.TestCase):
         with self.assertRaises(GitHubError):
             self.client.tree_snapshot(RepoRef("truncated-owner", "repo"), "main")
 
+    def test_compare_refs_maps_changed_file_metadata(self):
+        self.client.session.get = Mock(
+            return_value=response(
+                200,
+                {
+                    "status": "ahead",
+                    "ahead_by": 2,
+                    "behind_by": 0,
+                    "total_commits": 2,
+                    "base_commit": {"sha": "base123"},
+                    "commits": [{"sha": "first"}, {"sha": "head456"}],
+                    "files": [
+                        {
+                            "filename": "src/auth.py",
+                            "status": "modified",
+                            "additions": 8,
+                            "deletions": 3,
+                            "changes": 11,
+                        }
+                    ],
+                },
+            )
+        )
+        comparison = self.client.compare_refs(RepoRef("compare-owner", "repo"), "main", "feature/auth")
+        self.assertEqual(comparison.base_sha, "base123")
+        self.assertEqual(comparison.head_sha, "head456")
+        self.assertEqual(comparison.total_commits, 2)
+        self.assertEqual(comparison.files[0].path, "src/auth.py")
+        self.assertEqual(comparison.files[0].additions, 8)
+
     def test_decodes_and_bounds_contents_api_file(self):
         encoded = base64.b64encode(b"hello world").decode()
         self.client.session.get = Mock(

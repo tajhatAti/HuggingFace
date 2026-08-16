@@ -164,6 +164,16 @@ class RepositoryFile:
 
 
 @dataclass(frozen=True)
+class ChangeRecord:
+    path: str
+    status: str
+    additions: int = 0
+    deletions: int = 0
+    changes: int = 0
+    previous_path: str = ""
+
+
+@dataclass(frozen=True)
 class CodeSymbol:
     name: str
     kind: str
@@ -249,6 +259,9 @@ class RepositorySnapshot:
     fork: bool
     stars: int
     files: tuple[RepositoryFile, ...]
+    comparison_base: str = ""
+    base_commit_sha: str = ""
+    changes: tuple[ChangeRecord, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -111,6 +111,7 @@ def _report_markdown(prepared: PreparedAnalysis, review: str) -> str:
 - **Repository:** [{prepared.repository.full_name}]({prepared.repository.html_url})
 - **Branch:** `{prepared.repository.branch}`
 - **Commit:** `{sha}`
+- **Comparison base:** `{prepared.repository.comparison_base or 'none'}`
 - **Mode:** {prepared.mode.value}
 - **Depth:** {prepared.depth.value}
 - **Analysis ID:** `{prepared.analysis_id}`
@@ -165,6 +166,8 @@ def _report_json(prepared: PreparedAnalysis, review: str, patch_available: bool)
             "url": prepared.repository.html_url,
             "branch": prepared.repository.branch,
             "commit_sha": prepared.repository.commit_sha,
+            "comparison_base": prepared.repository.comparison_base,
+            "base_commit_sha": prepared.repository.base_commit_sha,
             "archived": prepared.repository.archived,
             "fork": prepared.repository.fork,
         },
@@ -200,6 +203,17 @@ def _report_json(prepared: PreparedAnalysis, review: str, patch_available: bool)
                 ],
             }
             for document in prepared.documents
+        ],
+        "changes": [
+            {
+                "path": item.path,
+                "status": item.status,
+                "additions": item.additions,
+                "deletions": item.deletions,
+                "changes": item.changes,
+                "previous_path": item.previous_path,
+            }
+            for item in prepared.repository.changes
         ],
         "dependencies": [
             {

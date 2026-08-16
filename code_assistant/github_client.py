@@ -19,7 +19,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import TTLCache
-from .domain import RepositoryFile
+from .domain import ChangeRecord, RepositoryFile
 
 _GITHUB_RE = re.compile(
     r"^(?:https?://github\.com/)?(?P<owner>[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/(?P<repo>[A-Za-z0-9._-]+?)(?:\.git)?/?$",
@@ -61,6 +61,17 @@ class TreeSnapshot:
     commit_sha: str
     files: tuple[RepositoryFile, ...]
     truncated: bool = False
+
+
+@dataclass(frozen=True)
+class CompareSnapshot:
+    base_sha: str
+    head_sha: str
+    status: str
+    ahead_by: int
+    behind_by: int
+    total_commits: int
+    files: tuple[ChangeRecord, ...]
 
 
 @dataclass(frozen=True)
@@ -246,6 +257,57 @@ class GitHubClient:
             {"path": item.path, "type": "blob", "size": item.size, "sha": item.sha}
             for item in snapshot.files
         ]
+
+    def compare_refs(self, repo: RepoRef, base: str, head: str) -> CompareSnapshot:
+        """Read bounded public compare metadata without downloading patch bodies."""
+
+        base = validate_branch(base)
+        head = validate_branch(head)
+        key = ("compare", repo.owner.casefold(), repo.repo.casefold(), base, head)
+        cached = _PUBLIC_CACHE.get(key)
+        if isinstance(cached, CompareSnapshot):
+            return cached
+
+        encoded_base = quote(base, safe="")
+        encoded_head = quote(head, safe="")
+        data = self._json(
+            f"{self.API_ROOT}/repos/{repo.owner}/{repo.repo}/compare/{encoded_base}...{encoded_head}"
+        )
+        records: list[ChangeRecord] = []
+        for item in data.get("files", [])[:300]:
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("filename") or "")
+            if not path:
+                continue
+            records.append(
+                ChangeRecord(
+                    path=path,
+                    status=str(item.get("status") or "modified"),
+                    additions=max(0, int(item.get("additions") or 0)),
+                    deletions=max(0, int(item.get("deletions") or 0)),
+                    changes=max(0, int(item.get("changes") or 0)),
+                    previous_path=str(item.get("previous_filename") or ""),
+                )
+            )
+        base_data = data.get("base_commit") if isinstance(data.get("base_commit"), dict) else {}
+        head_data = data.get("merge_base_commit") if isinstance(data.get("merge_base_commit"), dict) else {}
+        commits = data.get("commits") if isinstance(data.get("commits"), list) else []
+        if commits and isinstance(commits[-1], dict):
+            head_sha = str(commits[-1].get("sha") or "")
+        else:
+            head_sha = str(head_data.get("sha") or "")
+        comparison = CompareSnapshot(
+            base_sha=str(base_data.get("sha") or ""),
+            head_sha=head_sha,
+            status=str(data.get("status") or "unknown"),
+            ahead_by=max(0, int(data.get("ahead_by") or 0)),
+            behind_by=max(0, int(data.get("behind_by") or 0)),
+            total_commits=max(0, int(data.get("total_commits") or 0)),
+            files=tuple(records),
+        )
+        _PUBLIC_CACHE.set(key, comparison, ttl_seconds=300)
+        return comparison
 
     def text_file(self, repo: RepoRef, branch: str, path: str, max_bytes: int) -> str:
         """Read one bounded UTF-8-ish file through the GitHub Contents API."""

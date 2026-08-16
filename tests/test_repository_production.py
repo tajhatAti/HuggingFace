@@ -2,8 +2,18 @@ from __future__ import annotations
 
 import unittest
 
-from code_assistant.domain import AnalysisMode, RepositoryFile, ReviewDepth
-from code_assistant.github_client import RepoMetadata, RepoRef, TreeSnapshot
+from code_assistant.domain import (
+    AnalysisMode,
+    ChangeRecord,
+    RepositoryFile,
+    ReviewDepth,
+)
+from code_assistant.github_client import (
+    CompareSnapshot,
+    RepoMetadata,
+    RepoRef,
+    TreeSnapshot,
+)
 from code_assistant.ranking import MAX_TREE_FILES
 from code_assistant.repository import prepare_analysis
 
@@ -48,6 +58,17 @@ class ProductionFakeClient:
     def tree_snapshot(self, repo: RepoRef, branch: str):
         return TreeSnapshot("0123456789abcdef" * 2, tuple(self.files), False)
 
+    def compare_refs(self, repo: RepoRef, base: str, head: str):
+        return CompareSnapshot(
+            base_sha="base-sha",
+            head_sha="head-sha",
+            status="ahead",
+            ahead_by=2,
+            behind_by=0,
+            total_commits=2,
+            files=(ChangeRecord("src/auth.py", "modified", 8, 3, 11),),
+        )
+
     def text_file(self, repo: RepoRef, branch: str, path: str, max_bytes: int):
         self.read_paths.append(path)
         return self.contents[path][:max_bytes]
@@ -80,6 +101,34 @@ class PrepareAnalysisTests(unittest.TestCase):
         self.assertEqual({item.name for item in prepared.dependencies}, {"requests", "transformers"})
         self.assertTrue(any(item.rule_id == "DEBUG-ENABLED" for item in prepared.findings))
         self.assertIn("OUTPUT CONTRACT", prepared.prompt)
+
+    def test_branch_comparison_prioritizes_changed_evidence(self):
+        prepared = prepare_analysis(
+            "owner/repo",
+            "feature/auth",
+            "Review the authentication branch for safe regressions",
+            "main",
+            mode=AnalysisMode.BUG_HUNT,
+            file_limit=4,
+            client=ProductionFakeClient(),
+        )
+        self.assertEqual(prepared.repository.comparison_base, "main")
+        self.assertEqual(prepared.repository.base_commit_sha, "base-sha")
+        self.assertEqual(prepared.repository.changes[0].path, "src/auth.py")
+        auth_document = next(document for document in prepared.documents if document.path == "src/auth.py")
+        self.assertIn("changed against base", auth_document.reasons)
+        self.assertIn("GITHUB COMPARE METADATA", prepared.prompt)
+        self.assertIn("modified: src/auth.py (+8/-3)", prepared.prompt)
+
+    def test_same_comparison_refs_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "একই"):
+            prepare_analysis(
+                "owner/repo",
+                "main",
+                "Review this branch against its base safely",
+                "main",
+                client=ProductionFakeClient(),
+            )
 
     def test_private_repository_is_rejected_before_tree_access(self):
         client = ProductionFakeClient(private=True)

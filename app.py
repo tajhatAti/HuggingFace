@@ -83,6 +83,7 @@ def _error_outputs(message: str):
 def inspect_repository_ui(
     repo: str,
     branch: str,
+    comparison_base: str,
     task: str,
     mode: str,
     depth: str,
@@ -95,6 +96,7 @@ def inspect_repository_ui(
             repo,
             branch,
             task,
+            comparison_base,
             mode=mode,
             depth=depth,
             file_limit=int(file_limit),
@@ -315,7 +317,12 @@ with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytic
                 value="tajhatAti/Claude",
                 placeholder="owner/repository অথবা https://github.com/owner/repository",
             )
-            branch_input = gr.Textbox(label="Branch (ফাঁকা রাখলে default)", placeholder="main")
+            with gr.Row():
+                branch_input = gr.Textbox(label="Review branch (ফাঁকা = default)", placeholder="feature/login")
+                comparison_base_input = gr.Textbox(
+                    label="Compare base (optional)",
+                    placeholder="main",
+                )
             task_input = gr.Textbox(
                 label="কী review/change চান?",
                 placeholder="যেমন: Authentication flow security review করে minimal production patch suggest করো",
@@ -387,6 +394,7 @@ with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytic
             [
                 "tajhatAti/ai",
                 "main",
+                "",
                 "Runtime failure এবং missing architecture review করে minimal production fix suggest করো",
                 AnalysisMode.BUG_HUNT.value,
                 ReviewDepth.STANDARD.value,
@@ -395,6 +403,7 @@ with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytic
             [
                 "tajhatAti/Claude",
                 "claude",
+                "",
                 "Authentication, authorization এবং secret handling defensive security audit করো",
                 AnalysisMode.SECURITY.value,
                 ReviewDepth.DEEP.value,
@@ -403,17 +412,34 @@ with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytic
             [
                 "tajhatAti/routinek",
                 "main",
+                "",
                 "Frontend architecture, accessibility এবং test strategy improve করার focused patch দাও",
                 AnalysisMode.COMPREHENSIVE.value,
                 ReviewDepth.STANDARD.value,
                 9,
             ],
         ],
-        inputs=[repo_input, branch_input, task_input, mode_input, depth_input, file_limit],
+        inputs=[
+            repo_input,
+            branch_input,
+            comparison_base_input,
+            task_input,
+            mode_input,
+            depth_input,
+            file_limit,
+        ],
         label="Professional review examples",
     )
 
-    review_inputs = [repo_input, branch_input, task_input, mode_input, depth_input, file_limit]
+    review_inputs = [
+        repo_input,
+        branch_input,
+        comparison_base_input,
+        task_input,
+        mode_input,
+        depth_input,
+        file_limit,
+    ]
     inspection_outputs = [
         analysis_state,
         repository_overview,

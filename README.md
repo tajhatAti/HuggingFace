@@ -24,6 +24,7 @@ The interface is optimized for Bangla/Banglish-speaking developers while review 
 
 - Canonical GitHub repository and branch validation with strict host controls.
 - Public metadata, recursive tree, commit snapshot, and bounded source retrieval through the GitHub REST API.
+- Optional base→review-branch comparison with commit metadata, changed-file deltas, and automatic changed-file prioritization (no remote patch body is trusted).
 - Large-repository protection: 20,000-tree-file ceiling, 14 selected-file ceiling, per-file limits, and depth-based context budgets.
 - Deterministic relevance ranking using user terms, common filename abbreviations, review mode, entrypoints, manifests, tests, CI, and explicit path mentions.
 - Language inventory, top-level directory map, test/docs/CI counts, framework signals, package managers, and probable entrypoints.
@@ -144,6 +145,7 @@ Detailed component responsibilities and data flow are in [`docs/ARCHITECTURE.md`
 | Control | Current bound |
 |---|---:|
 | Recursive tree | 20,000 files |
+| Branch comparison metadata | 300 changed files |
 | Selectable evidence | 3–14 files |
 | Source read per file | 24,000 bytes |
 | Quick context | 22,000 characters |

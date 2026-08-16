@@ -38,6 +38,7 @@ The client exposes:
 - branch validation;
 - metadata retrieval;
 - recursive Git tree snapshots with commit SHA;
+- optional base/head compare metadata for changed-file prioritization;
 - bounded Base64 file decoding from the Contents API.
 
 The client does not follow `download_url`, raw URLs, submodule links, release assets, Git LFS pointers, webhooks, or user-selected hosts.
