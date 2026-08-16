@@ -47,7 +47,7 @@ These boundaries keep it an ML code-review demo rather than a remote-management 
 - **SDK:** Gradio
 - **Hardware requested after sync:** ZeroGPU (`zero-a10g`)
 
-The workflow expects a repository secret named `HF_TOKEN` containing a **fine-grained Hugging Face token with write access only to that Space**. No token is stored in this repository.
+The workflow uses Hugging Face **Trusted Publishers (OIDC)**. GitHub receives a short-lived token scoped only to this Space for each deployment; there is no long-lived `HF_TOKEN` to create, store, expose, or rotate. The Space's Trusted Publisher authorizes repository `tajhatAti/HuggingFace`, branch `arena/01a00b5b-huggingface`, and workflow `sync-to-huggingface.yml`.
 
 ## Runtime configuration
 
