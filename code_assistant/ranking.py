@@ -11,7 +11,6 @@ from .domain import AnalysisMode, RepositoryFile
 from .inspection import ENTRYPOINT_NAMES, is_documentation_path, is_test_path
 from .security import is_safe_path
 
-
 MAX_TREE_FILES = 20_000
 MAX_SELECTED_FILES = 14
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")

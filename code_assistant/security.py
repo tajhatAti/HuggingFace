@@ -13,7 +13,6 @@ from pathlib import PurePosixPath
 from .domain import Finding, Severity
 from .inspection import detect_language
 
-
 MAX_TASK_CHARS = 6_000
 MAX_STATIC_FINDINGS_PER_FILE = 8
 MAX_STATIC_FINDINGS_TOTAL = 50

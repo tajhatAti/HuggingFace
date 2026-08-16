@@ -5,9 +5,9 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Generic, Hashable, TypeVar
-
+from typing import Generic, TypeVar
 
 KeyT = TypeVar("KeyT", bound=Hashable)
 ValueT = TypeVar("ValueT")

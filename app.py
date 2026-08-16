@@ -23,9 +23,12 @@ from code_assistant.presentation import (
 )
 from code_assistant.prompting import build_followup_prompt
 from code_assistant.reporting import build_review_artifacts
-from code_assistant.repository import UnsafeRequestError, ensure_safe_request, prepare_analysis
+from code_assistant.repository import (
+    UnsafeRequestError,
+    ensure_safe_request,
+    prepare_analysis,
+)
 from code_assistant.security import sanitize_model_output
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s :: %(message)s")
 log = logging.getLogger("taj-ai-pro")
@@ -54,7 +57,7 @@ try:
         TOKENIZER.pad_token_id = TOKENIZER.eos_token_id
     MODEL.eval()
     log.info("Model is ready")
-except Exception as exc:  # Keep deterministic repository intelligence available.
+except Exception as exc:  # noqa: BLE001 - external model stacks raise heterogeneous startup errors.
     MODEL_ERROR = f"{type(exc).__name__}: {exc}"
     log.error("Model loading failed: %s", MODEL_ERROR)
     log.debug(traceback.format_exc())
@@ -194,6 +197,13 @@ def build_exports_ui(prepared: PreparedAnalysis | None, review: str):
         artifacts.patch_path,
         artifacts.json_path,
         f"✅ **Professional review ready** · Markdown + JSON export · {patch_note}",
+    )
+
+
+def static_inspection_complete():
+    return (
+        "## AI review\n\nStatic inspection complete. Use **Run professional AI review** when you want a model-generated report.",
+        "✅ **Static repository intelligence ready** · no GPU quota used",
     )
 
 
@@ -443,9 +453,9 @@ with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytic
         outputs=inspection_outputs,
         api_name="inspect_only",
     ).then(
-        fn=lambda: "✅ **Static repository intelligence ready** · no GPU quota used",
+        fn=static_inspection_complete,
         inputs=None,
-        outputs=[operation_status],
+        outputs=[review_result, operation_status],
         api_name=False,
     )
 

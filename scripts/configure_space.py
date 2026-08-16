@@ -7,7 +7,6 @@ import sys
 
 from huggingface_hub import HfApi
 
-
 SPACE_ID = os.getenv("HF_SPACE_ID", "madarauchihagmailcom/My")
 TOKEN = os.getenv("HF_TOKEN", "").strip()
 

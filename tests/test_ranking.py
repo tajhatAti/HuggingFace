@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 
 from code_assistant.domain import AnalysisMode, RepositoryFile
-from code_assistant.ranking import rank_candidate_paths, request_terms, select_candidate_paths
+from code_assistant.ranking import (
+    rank_candidate_paths,
+    request_terms,
+    select_candidate_paths,
+)
 
 
 class RequestTermTests(unittest.TestCase):

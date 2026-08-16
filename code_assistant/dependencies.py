@@ -10,8 +10,9 @@ import json
 import re
 import shlex
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from pathlib import PurePosixPath
-from typing import Any, Iterable
+from typing import Any
 
 try:
     import tomllib
@@ -19,7 +20,6 @@ except ImportError:  # pragma: no cover - Python 3.11+ in production
     tomllib = None  # type: ignore[assignment]
 
 from .domain import DependencyRecord, Finding, Severity
-
 
 MAX_DEPENDENCIES = 800
 MANIFEST_FILENAMES = frozenset(
@@ -62,11 +62,7 @@ def _is_pinned(specification: str) -> bool:
         return True
     if re.search(r"(?:^|,)\s*(?:==|===)\s*[^*\s,]+", value):
         return True
-    if re.fullmatch(r"v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?", value):
-        return True
-    if re.fullmatch(r"\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?", value):
-        return True
-    return False
+    return bool(re.fullmatch(r"v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?", value))
 
 
 def _record(name: Any, spec: Any, source: str, group: str) -> DependencyRecord | None:
@@ -116,7 +112,7 @@ def _parse_requirements(path: str, content: str) -> list[DependencyRecord]:
     records: list[DependencyRecord] = []
     for raw_line in content.splitlines():
         line = raw_line.strip()
-        if not line or line.startswith("#") or line.startswith(("-r", "--requirement", "-c", "--constraint")):
+        if not line or line.startswith(("#", "-r", "--requirement", "-c", "--constraint")):
             continue
         if line.startswith(("git+", "http://", "https://", "-e ", "--editable ")):
             candidate = line.rsplit("#egg=", 1)[-1] if "#egg=" in line else "direct-reference"
@@ -385,8 +381,10 @@ def render_dependency_inventory(dependencies: tuple[DependencyRecord, ...]) -> s
     lines = [
         "## Dependency inventory",
         "",
-        f"**{len(dependencies):,} packages** · {runtime:,} runtime · {development:,} development · "
-        f"{pinned:,} exactly pinned",
+        (
+            f"**{len(dependencies):,} packages** · {runtime:,} runtime · {development:,} development · "
+            f"{pinned:,} exactly pinned"
+        ),
         "",
         f"Manifests: {', '.join(f'`{source}`' for source in sources)}",
         "",

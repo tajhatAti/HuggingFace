@@ -7,9 +7,10 @@ without downloading a language model or contacting GitHub.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterable
+from typing import Any
 
 
 class AnalysisMode(str, Enum):
@@ -24,7 +25,7 @@ class AnalysisMode(str, Enum):
     DOCUMENTATION = "Documentation"
 
     @classmethod
-    def coerce(cls, value: str | "AnalysisMode" | None) -> "AnalysisMode":
+    def coerce(cls, value: str | AnalysisMode | None) -> AnalysisMode:
         if isinstance(value, cls):
             return value
         normalized = (value or "").strip().casefold()
@@ -104,7 +105,7 @@ class ReviewDepth(str, Enum):
     DEEP = "Deep"
 
     @classmethod
-    def coerce(cls, value: str | "ReviewDepth" | None) -> "ReviewDepth":
+    def coerce(cls, value: str | ReviewDepth | None) -> ReviewDepth:
         if isinstance(value, cls):
             return value
         normalized = (value or "").strip().casefold()
@@ -297,7 +298,7 @@ class MutableMetrics:
 
     values: dict[str, int | float | str] = field(default_factory=dict)
 
-    def set(self, name: str, value: int | float | str) -> None:
+    def set(self, name: str, value: float | str) -> None:
         self.values[name] = value
 
     def increment(self, name: str, amount: int = 1) -> None:

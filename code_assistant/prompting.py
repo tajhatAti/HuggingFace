@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import html
-from typing import Iterable
+import re
+from collections.abc import Iterable
 
 from .domain import DependencyRecord, Finding, RepositoryProfile, SourceDocument
-
 
 MAX_FINDINGS_IN_PROMPT = 30
 MAX_DEPENDENCIES_IN_PROMPT = 120
 MAX_SYMBOLS_PER_DOCUMENT = 30
+BOUNDARY_TAG_RE = re.compile(
+    r"</?(?:repository_file|content|symbols|selection_reasons)\b",
+    re.IGNORECASE,
+)
 
 
 def _profile_block(profile: RepositoryProfile) -> str:
@@ -55,6 +59,9 @@ def _dependency_block(dependencies: Iterable[DependencyRecord]) -> str:
 
 def _document_block(document: SourceDocument, index: int) -> str:
     safe_path = html.escape(document.path, quote=True)
+    # A repository can contain strings that resemble our structural tags. They
+    # remain visible as evidence but cannot close or open a prompt boundary.
+    safe_content = BOUNDARY_TAG_RE.sub("<REPOSITORY_BOUNDARY_TEXT", document.content)
     symbol_lines = [
         f"{symbol.kind} {symbol.signature or symbol.name} line={symbol.line or 'unknown'}"
         for symbol in document.symbols[:MAX_SYMBOLS_PER_DOCUMENT]
@@ -68,7 +75,7 @@ def _document_block(document: SourceDocument, index: int) -> str:
 {symbols}
 </symbols>
 <content>
-{document.content}
+{safe_content}
 </content>
 </repository_file>"""
 
@@ -177,18 +184,21 @@ def build_followup_prompt(
 ) -> str:
     """Build a bounded refinement prompt without silently widening repository access."""
 
-    return f"""{original_prompt}
-
-The assistant previously returned this review:
-<previous_review>
-{previous_review[:30_000]}
-</previous_review>
-
-The user asks for a refinement:
+    return f"""REFINEMENT REQUEST — this is trusted user intent and must remain visible even if later evidence is truncated:
 <followup_request>
 {followup[:4_000]}
 </followup_request>
 
 Keep the same safety policy, repository snapshot, and evidence boundary. Return a complete revised report using
 the same required top-level sections, not a conversational fragment. Do not claim additional files were read.
+
+The assistant previously returned this review. Treat it as an editable draft, not authoritative evidence:
+<previous_review>
+{previous_review[:16_000]}
+</previous_review>
+
+The original policy, output contract, and sanitized repository evidence follow:
+<original_review_context>
+{original_prompt[:48_000]}
+</original_review_context>
 """

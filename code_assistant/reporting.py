@@ -21,7 +21,6 @@ from .presentation import (
 )
 from .security import sanitize_model_output
 
-
 REPORT_ROOT = Path(os.getenv("REPORT_DIRECTORY", "/tmp/taj-ai-reports"))
 REPORT_TTL_SECONDS = 2 * 60 * 60
 MAX_REPORT_FILES = 120

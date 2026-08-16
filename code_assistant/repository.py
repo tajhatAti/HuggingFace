@@ -24,10 +24,22 @@ from .domain import (
     SourceDocument,
     sort_findings,
 )
-from .github_client import GitHubClient, RepoRef, TreeSnapshot, parse_github_repo, validate_branch
+from .github_client import (
+    GitHubClient,
+    GitHubError,
+    RepoRef,
+    TreeSnapshot,
+    parse_github_repo,
+    validate_branch,
+)
 from .inspection import build_repository_profile, detect_language, extract_symbols
 from .prompting import build_review_prompt
-from .ranking import MAX_SELECTED_FILES, MAX_TREE_FILES, rank_candidate_paths, select_candidate_paths
+from .ranking import (
+    MAX_SELECTED_FILES,
+    MAX_TREE_FILES,
+    rank_candidate_paths,
+    select_candidate_paths,
+)
 from .security import (
     MAX_STATIC_FINDINGS_TOTAL,
     UnsafeRequestError,
@@ -37,7 +49,6 @@ from .security import (
     sanitize_repository_content,
     scan_static_findings,
 )
-
 
 MAX_FILE_BYTES = 24_000
 MAX_CONTEXT_CHARS = 48_000
@@ -177,7 +188,7 @@ def prepare_analysis(
         read_limit = min(MAX_FILE_BYTES, max(allocation * 2, resolved_depth.per_file_chars))
         try:
             raw_content = client.text_file(repo, branch, item.path, read_limit)
-        except Exception:
+        except (GitHubError, ValueError, UnicodeError):
             unavailable_count += 1
             continue
 

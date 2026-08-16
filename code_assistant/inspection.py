@@ -9,7 +9,6 @@ from pathlib import PurePosixPath
 
 from .domain import CodeSymbol, RepositoryFile, RepositoryProfile
 
-
 LANGUAGE_BY_EXTENSION: dict[str, str] = {
     ".py": "Python",
     ".pyi": "Python",

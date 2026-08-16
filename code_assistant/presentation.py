@@ -76,9 +76,11 @@ def render_selected_files(prepared: PreparedAnalysis) -> str:
     lines.extend(
         (
             "",
-            f"**Bounded context:** {prepared.metric('context_chars', 0):,} sanitized characters · "
-            f"{prepared.metric('secret_redactions', 0)} secret redactions · "
-            f"{prepared.metric('prompt_injection_redactions', 0)} prompt-injection redactions",
+            (
+                f"**Bounded context:** {prepared.metric('context_chars', 0):,} sanitized characters · "
+                f"{prepared.metric('secret_redactions', 0)} secret redactions · "
+                f"{prepared.metric('prompt_injection_redactions', 0)} prompt-injection redactions"
+            ),
         )
     )
     return "\n".join(lines)

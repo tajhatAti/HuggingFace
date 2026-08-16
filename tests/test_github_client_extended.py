@@ -6,7 +6,13 @@ from unittest.mock import Mock
 
 import requests
 
-from code_assistant.github_client import GitHubClient, GitHubError, RepoRef, parse_github_repo, validate_branch
+from code_assistant.github_client import (
+    GitHubClient,
+    GitHubError,
+    RepoRef,
+    parse_github_repo,
+    validate_branch,
+)
 
 
 def response(status: int, payload=None, headers=None):

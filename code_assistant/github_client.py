@@ -21,7 +21,6 @@ from urllib3.util.retry import Retry
 from .cache import TTLCache
 from .domain import RepositoryFile
 
-
 _GITHUB_RE = re.compile(
     r"^(?:https?://github\.com/)?(?P<owner>[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/(?P<repo>[A-Za-z0-9._-]+?)(?:\.git)?/?$",
     re.IGNORECASE,

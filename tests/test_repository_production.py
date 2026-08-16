@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from code_assistant.domain import AnalysisMode, ReviewDepth
+from code_assistant.domain import AnalysisMode, RepositoryFile, ReviewDepth
 from code_assistant.github_client import RepoMetadata, RepoRef, TreeSnapshot
-from code_assistant.domain import RepositoryFile
 from code_assistant.ranking import MAX_TREE_FILES
 from code_assistant.repository import prepare_analysis
 
