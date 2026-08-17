@@ -24,13 +24,16 @@ The public product will preserve:
 
 - canonical GitHub-only network access;
 - public repositories only;
-- no repository code execution, shell, package installation, or clone;
-- no visitor credential collection;
-- no repository write/commit/push authority;
-- bounded trees, files, prompts, outputs, caches, queues, and artifacts;
-- pre-inference and post-generation secret redaction;
+- no repository, APK, archive, release asset, or workflow execution;
+- no shell, package installation, build, archive extraction, or clone;
+- no visitor credential collection or owner-token proxying of protected GitHub content;
+- no repository write/commit/push/workflow authority;
+- immutable commit/blob identity for proxied files and selected ZIPs;
+- repository-scoped official links for full archives, releases, and Actions;
+- bounded trees, lists, files, selected ZIPs, prompts, outputs, caches, queues, and artifacts;
+- credential/key path blocking in RepoVault and pre/post secret redaction in AI review;
 - explicit untrusted-source prompt boundaries;
-- transparent distinction between heuristics and confirmed facts.
+- transparent distinction between metadata, heuristics, and confirmed facts.
 
 Changes that weaken one of these commitments require an explicit threat-model update and dedicated regression tests.
 

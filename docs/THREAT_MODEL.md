@@ -2,120 +2,135 @@
 
 ## Scope
 
-This document covers the public Hugging Face Space, its GitHub read path, model prompt, UI state, and downloadable reports. It does not claim to secure a future self-hosted execution agent or GitHub write integration.
+This document covers the public Hugging Face Space, repository explorer/download path, GitHub API client, temporary files, release and Actions links, and the secondary AI review workspace. It does not claim to secure a future private-repository service, execution sandbox, GitHub write integration, or generic file proxy.
 
 ## Assets
 
-- Availability of the public Space and its ZeroGPU quota.
-- Confidentiality of Space-owner deployment credentials.
-- Integrity of review output and safety boundaries.
-- Visitor trust that repository code is not executed.
-- Public GitHub API quota.
-- Ephemeral report files.
+- Visitor trust that repository files, APKs, archives, and workflows are never executed.
+- Confidentiality of Space-owner deployment/API credentials.
+- Isolation and short lifetime of generated individual/selected downloads.
+- Integrity of repository/ref/blob identity shown to a visitor.
+- Availability of CPU, RAM, disk, public GitHub quota, and ZeroGPU quota.
+- Integrity and confidentiality controls around AI review prompts and exports.
 
-The application is not designed to receive private source, production credentials, personal data, or proprietary artifacts.
+The application is not designed to receive private source, visitor tokens, production credentials, personal data, or proprietary artifacts.
 
 ## Trust zones
 
-### Trusted application code
+### Trusted application
 
-The checked-in Python package, deployment workflow, fixed model identifier, and owner-configured Space settings are trusted subject to normal supply-chain review.
+Checked-in Python, fixed GitHub API roots, deployment workflow, fixed model identifier, and owner-configured Space settings are trusted subject to normal review.
 
-### Partially trusted user request
+### User-controlled identifiers
 
-A visitor controls repository identifier, branch, task, mode, depth, and evidence limit. Inputs are length- and format-bounded. Requests with clear malicious intent are refused, while defensive security work remains allowed.
+A visitor controls repository, ref, file search, selected paths from a server-provided list, commit selection, workflow-run selection, and AI review request. All remain untrusted and format/resource bounded.
 
-### Untrusted repository
+### Untrusted repository and artifacts
 
-Names, paths, metadata, manifests, source, documentation, comments, and embedded instructions are hostile data. They can attempt prompt injection, contain credentials, be syntactically invalid, or be extremely large.
+Paths, names, metadata, source bytes, binary files, release names/assets, workflow names, commit messages, manifests, comments, and embedded instructions are hostile data. They can be malformed, huge, misleading, secret-bearing, prompt-injecting, or executable on another system.
 
-### Probabilistic model output
+### GitHub
 
-The model can be incorrect, omit context, produce malformed patches, or echo dangerous patterns. Output is a suggestion, not an executed change. Final secret redaction and bounded export validation apply.
+GitHub is the sole repository data provider and an external dependency. API output is mapped into bounded records. Redirects are rejected. Large source archives, release assets, and protected artifact downloads remain on official GitHub pages.
 
-### External services
+### Probabilistic model
 
-GitHub and Hugging Face are external dependencies. Their failures, rate limits, and response changes must fail safely.
+AI output can be wrong, incomplete, insecure, or malformed. It is a suggestion and has no execution/write tool. Final redaction and export validation still apply.
 
 ## Primary threats and controls
 
-### Server-side request forgery
+### Server-side request forgery and open proxying
 
-**Threat:** A repository or branch input redirects the server to an internal/arbitrary host.
+**Threat:** Input causes the Space to request an internal/arbitrary host or relay arbitrary large data.
 
-**Controls:** Canonical full-match GitHub parser, hard-coded API root, percent-encoded path components, redirect rejection, and no use of repository-provided download URLs.
+**Controls:** Full-match GitHub parser, fixed API root, encoded path/query values, redirect rejection, no visitor URL fetch, no generic download endpoint, bounded blob reads, and first-party links for full archives/releases/Actions.
 
-### Repository code execution
+### Private-repository confused deputy
 
-**Threat:** Malicious source triggers import hooks, package scripts, builds, tests, shells, or deserialization.
+**Threat:** An owner-configured token lets anonymous visitors read private source.
 
-**Controls:** Contents API text only; no clone, import, package install, compiler, shell, subprocess, archive extraction, or runtime execution. Python symbol inspection uses `ast.parse`, not import. Manifest parsers use data-only standard-library operations.
+**Controls:** Repository metadata is checked first and any repository reported private is rejected before tree/blob access. Visitors cannot supply tokens. Private metadata is not placed in the public cache. Protected artifact downloads are never proxied with an owner token.
 
-### Prompt injection
+### Repository, APK, or workflow execution
 
-**Threat:** Source comments/docs instruct the model to reveal prompts, ignore policy, or change roles.
+**Threat:** Malicious content triggers an import, build, package script, archive extraction, shell, workflow, APK, parser gadget, or executable preview.
 
-**Controls:** Strong injection lines are replaced; prompt trust boundaries mark every file as untrusted; system and user instructions repeat non-compliance requirements; files cannot invoke tools; output receives final sanitization.
+**Controls:** No clone, checkout, subprocess, import, compiler, package manager, test runner, workflow dispatch, APK runner, archive extraction, or object-deserializing parser. Binary files have metadata-only preview. ZIP creation writes bytes without interpreting them. The AI symbol parser never imports source.
 
-### Credential exposure
+### Path traversal in selected archives
 
-**Threat:** Public repositories accidentally contain live credentials that appear in prompts, logs, findings, model output, or reports.
+**Threat:** A crafted Git path writes outside the ZIP namespace or collides with a server path.
 
-**Controls:** Sensitive filenames and extensions are not read; known token/private-key/URI/assignment patterns are redacted before model use; evidence rendering is redacted; model output is redacted again; reports exclude raw source and full prompts. Logs do not print source or tokens.
+**Controls:** Selections must exist in the immutable tree map. Empty/dot/dot-dot/absolute/backslash/NUL paths are rejected before `writestr`. The ZIP is newly created under a randomized server path and is never extracted server-side.
 
-Redaction is defense in depth, not a guarantee. Public-repository owners must revoke any committed credential and remove it from history.
+### Commit/ref confusion
 
-### Private repository confused deputy
+**Threat:** The UI claims to show one ref while downloading another moving branch state.
 
-**Threat:** An owner-configured GitHub token allows an anonymous visitor to read private source through the Space.
+**Controls:** The recursive tree response resolves an exact commit SHA. Individual files use tree-provided blob SHAs. Complete archives use the exact commit, not the branch. Historical browsing replaces session snapshot atomically. UI surfaces requested ref and exact SHA.
 
-**Controls:** Metadata is checked first and any repository marked private is rejected before tree/file access. Private metadata is not shared through the public cache. Visitors are never asked for tokens.
+### Credential exposure from public source
+
+**Threat:** A public repository accidentally contains active credentials that RepoVault previews, packages, logs, caches, or sends to the model.
+
+**Controls:** Common secret/key filenames and extensions are listed but not previewed or included in selected ZIPs. Large blob bytes are not globally cached. Logs contain no source bytes. The AI path applies stronger path exclusion and pre/post secret redaction. Full GitHub archives are clearly identified as direct, uninspected first-party downloads.
+
+These controls are defense in depth, not a guarantee. Repository owners must revoke committed credentials and remove them from history.
+
+### Malicious browser links
+
+**Threat:** Repository metadata injects a phishing/external download link.
+
+**Controls:** Repository, commit, archive, run, artifact, and release-note links are built from the validated owner/repository. Release asset links are allowed only for HTTPS `github.com` URLs under that repository's release-download path. Markdown labels are escaped and length bounded.
+
+### Temporary-file cross-user access
+
+**Threat:** One visitor guesses another generated file or old files accumulate.
+
+**Controls:** Random names, 0700 directory, 0600 files where supported, no index, Gradio-managed file delivery, two-hour expiry, 120-file cap, no persistent storage, and no raw AI prompt/source export. Stronger tenancy would require authenticated isolated storage.
 
 ### Resource exhaustion
 
-**Threat:** Huge repositories/files, expensive repeated analysis, dependency explosions, report accumulation, or GPU queue abuse exhaust resources.
+**Threat:** Huge trees/files, many selected blobs, compression, repeated API calls, excessive sessions, or AI queue use exhausts resources.
 
-**Controls:** Hard tree/file/context/output/finding/dependency bounds; queue limit; ZeroGPU duration; TTL/LRU cache; expiring/count-bounded report directory; no persistent vector index or repository clone.
+**Controls:** 20,000-file tree ceiling; 500/1,000 display bounds; 25 MB individual file; 20-file/50 MB selected ZIP; bounded commit/release/run/artifact lists; shrinking per-ZIP byte budget; TTL/LRU metadata cache; queue limit; expiring files; and bounded ZeroGPU duration. Full repositories/releases are not proxied.
 
-### Malicious model request
+### Actions authentication bypass
 
-**Threat:** A visitor asks for credential theft, malware, phishing, unauthorized access, destructive automation, or evasion.
+**Threat:** The Space uses an owner token to make protected Actions artifacts anonymously downloadable.
 
-**Controls:** Deterministic intent screening, model safety policy, defensive-only security framing, no execution/write tools, and no arbitrary network access.
+**Controls:** Only artifact metadata is read through the public client. UI links to official GitHub run/artifact pages. GitHub enforces its own sign-in and permissions. No visitor or owner token is added to browser links or responses.
 
-### Misleading security claims
+### Prompt injection
 
-**Threat:** Regex findings or model text are presented as confirmed vulnerabilities or successful tests.
+**Threat:** Source tells the AI to reveal prompts, ignore policy, or act on embedded instructions.
 
-**Controls:** UI and prompt label findings as heuristic leads; output contract requires confidence and evidence; static inventory states it is not an advisory lookup; model is told never to claim execution; exported verification notice repeats limitations.
+**Controls:** AI evidence excludes sensitive paths, recognized injection lines are replaced, every file is marked untrusted, the model has no tools, and output is sanitized. RepoVault preview itself does not invoke the model.
 
-### Patch misuse
+### Misleading analysis
 
-**Threat:** A generated patch is automatically applied or contains unrelated/destructive changes.
+**Threat:** Static or model output is presented as executed/confirmed.
 
-**Controls:** No write integration. Patch export requires plausible unified-diff structure, is bounded, and carries a review warning. A maintainer must inspect and test it separately.
-
-### Cross-user report access
-
-**Threat:** One visitor guesses another visitor's report filename.
-
-**Controls:** Randomized names, restrictive directory/file modes, Gradio-managed file delivery, no index, short retention, and no raw source. For stronger tenancy guarantees, deploy a dedicated authenticated service rather than a shared public Space.
+**Controls:** UI and prompt call deterministic findings heuristic leads; the model contract forbids claims of execution; reports include verification guidance; no patch is auto-applied.
 
 ## Abuse cases intentionally unsupported
 
-- Public shell or remote desktop.
-- Arbitrary command, test, build, or package execution.
-- Visitor-provided tokens or private repository proxying.
-- Automatic commit, push, merge, release, or deployment.
-- Tunnels, generic proxies, botnet control, credential collection, spam, cryptomining, or security bypass.
+- Public shells, remote desktops, tunnels, generic proxies, or remote management.
+- Arbitrary commands, builds, tests, package installs, APK execution, or workflow dispatch.
+- Private repository access or visitor token collection.
+- Owner-token proxying of protected Actions artifacts.
+- Automatic commit, push, PR, merge, release, or deployment.
+- Credential collection, phishing, malware delivery, destructive tooling, cryptomining, spam, or security restriction bypass.
 
 ## Residual risks
 
-- Novel credential formats may evade regex redaction.
-- Prompt injection can influence a language model despite layered instructions.
-- Static heuristics can produce false positives and false negatives.
-- Public GitHub data can contain personal or copyrighted material.
-- Model output can be incorrect or insecure.
-- Shared public infrastructure can experience queue and rate-limit contention.
+- Novel credential filenames may evade sensitive-path checks.
+- Direct GitHub archives can contain accidentally committed credentials because RepoVault does not inspect them.
+- Public repositories/assets can contain unlawful, malicious, copyrighted, or personal material.
+- A visitor can choose to run a downloaded file elsewhere; the Space cannot secure that external environment.
+- GitHub API/URL behavior can change.
+- Markdown or browser download behavior can have upstream vulnerabilities.
+- Shared infrastructure can experience quota and denial-of-service contention.
+- Static and model review can produce false positives/negatives.
 
-The residual-risk response is bounded evidence, no execution/write authority, transparent limitations, output review, and rapid rollback through Git/Hugging Face revisions.
+The response is a narrow GitHub-only boundary, immutable identity, no execution/write authority, strict limits, first-party large downloads, transparent warnings, tests, and rollback through versioned deployment.

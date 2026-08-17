@@ -1,4 +1,4 @@
-"""Safe production building blocks for Taj AI Code Assistant Pro."""
+"""Safe production building blocks for Taj GitHub Repository Vault and AI review."""
 
 from .domain import AnalysisMode, PreparedAnalysis, ReviewDepth, Severity
 from .github_client import GitHubClient, GitHubError, RepoRef, parse_github_repo

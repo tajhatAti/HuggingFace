@@ -14,13 +14,23 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install "requests>=2.32.0,<3.0.0"
+python -m pip install "requests>=2.32.0,<3.0.0" "ruff>=0.11,<1"
 python -m unittest discover -s tests -v
+ruff check app.py code_assistant tests scripts
 python -m compileall -q app.py code_assistant scripts tests
 git diff --check
 ```
 
 Install full runtime requirements only when testing the Gradio/model integration.
+
+## Changing repository downloads
+
+- Keep complete repositories and release assets on first-party GitHub URLs.
+- Fetch proxied files only by exact tree-provided blob SHA.
+- Validate every selected ZIP path and preserve file-count, per-file, and total-byte ceilings.
+- Never extract, execute, import, or render active binary/HTML content server-side.
+- Do not accept visitor tokens or use an owner token to expose protected/private resources.
+- Add positive tests plus host, traversal, sensitive-path, size, count, expiry, and malformed-response tests.
 
 ## Adding a language
 

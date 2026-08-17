@@ -30,6 +30,7 @@ class RepositoryParsingExtendedTests(unittest.TestCase):
             "owner/repo#fragment",
             "https://user@github.com/owner/repo",
             "git://github.com/owner/repo",
+            "http://github.com/owner/repo",
             "https://github.com.evil.test/owner/repo",
         )
         for value in invalid:
@@ -81,17 +82,17 @@ class GitHubClientRequestTests(unittest.TestCase):
             return_value=response(
                 200,
                 {
-                    "sha": "abc123",
+                    "sha": "a" * 40,
                     "truncated": False,
                     "tree": [
                         {"path": "src", "type": "tree", "sha": "tree"},
-                        {"path": "src/app.py", "type": "blob", "size": 42, "sha": "blob"},
+                        {"path": "src/app.py", "type": "blob", "size": 42, "sha": "b" * 40},
                     ],
                 },
             )
         )
         snapshot = self.client.tree_snapshot(RepoRef("tree-owner", "tree-repo"), "main")
-        self.assertEqual(snapshot.commit_sha, "abc123")
+        self.assertEqual(snapshot.commit_sha, "a" * 40)
         self.assertEqual(len(snapshot.files), 1)
         self.assertEqual(snapshot.files[0].path, "src/app.py")
 

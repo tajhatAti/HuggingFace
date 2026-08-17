@@ -1,8 +1,8 @@
 ---
-title: Taj AI Code Assistant Pro
-emoji: 🧠
-colorFrom: indigo
-colorTo: blue
+title: Taj GitHub Repository Vault
+emoji: 🗃️
+colorFrom: green
+colorTo: yellow
 sdk: gradio
 app_file: app.py
 python_version: 3.12.12
@@ -12,225 +12,178 @@ models:
   - Qwen/Qwen2.5-Coder-3B-Instruct
 ---
 
-# Taj AI Code Assistant Pro
+# Taj GitHub Repository Vault
 
-A production-oriented, read-only repository intelligence and AI code-review application for **public GitHub repositories**. It builds a bounded repository map, selects relevant evidence, removes secret-like values, neutralizes source-embedded prompt injection, runs deterministic static review heuristics, and asks a local Qwen coding model for a professional report and focused unified diff.
+A production-oriented, repository-first explorer and downloader for **public GitHub repositories**. Paste a repository URL to browse an immutable file snapshot, preview or download a file, package selected files, download the full source archive, inspect commit history, browse any commit, collect published release assets, and discover GitHub Actions artifacts.
 
-The interface is optimized for Bangla/Banglish-speaking developers while review requests and reports can also be written in English.
+The previous Qwen-powered AI repository reviewer remains available as a secondary specialist workspace.
 
 ## Product capabilities
 
-### Repository intelligence
+### Repository explorer
 
-- Canonical GitHub repository and branch validation with strict host controls.
-- Public metadata, recursive tree, commit snapshot, and bounded source retrieval through the GitHub REST API.
-- Optional base→review-branch comparison with commit metadata, changed-file deltas, and automatic changed-file prioritization (no remote patch body is trusted).
-- Large-repository protection: 20,000-tree-file ceiling, 14 selected-file ceiling, per-file limits, and depth-based context budgets.
-- Deterministic relevance ranking using user terms, common filename abbreviations, review mode, entrypoints, manifests, tests, CI, and explicit path mentions.
-- Language inventory, top-level directory map, test/docs/CI counts, framework signals, package managers, and probable entrypoints.
-- Symbol extraction for Python, JavaScript/TypeScript, Go, Rust, Java/Kotlin/C#/Scala, PHP, and Ruby without importing source.
-- Ten-minute bounded in-process caching for repeated public metadata and source reads.
+- Canonical `owner/repository` and `https://github.com/owner/repository` validation.
+- Branch, tag, or commit selection; a blank ref resolves to the default branch.
+- Recursive Git tree index pinned to the commit SHA returned by GitHub.
+- Searchable path list and paginated file table across the complete bounded tree, with type, size, blob SHA, and proxy status.
+- Safe text preview for supported files and metadata-only treatment for binary files.
+- Individual-file preparation from the exact Git blob ID.
+- Potential credential/private-key files are listed but not previewed or proxied.
 
-### Review modes
+### Downloads
 
-- Comprehensive review
-- Bug hunt
-- Defensive security audit
-- Performance review
-- Architecture review
-- Test strategy
-- Documentation review
+- Individual files up to 25 MB through an ephemeral Gradio download.
+- Selected-file ZIP generation for up to 20 files and 50 MB of uncompressed content.
+- Archive paths are validated against traversal and exact blob IDs are used.
+- Complete snapshot ZIP and TAR.GZ links point directly to GitHub and are pinned to an immutable commit.
+- Temporary files use randomized names, restrictive permissions, two-hour expiry, and a count ceiling.
 
-Quick, Standard, and Deep depth profiles control evidence count and context size. The public Space remains intentionally bounded even when Deep mode is selected.
+### History and historical snapshots
 
-### Deterministic analysis
+- Latest 50 commits with SHA, author, time, message, and signature-verification status.
+- Changed-file metadata for a selected commit, including status and addition/deletion counts.
+- One-click replacement of the active Explorer with the selected historical commit.
+- Individual, selected, and complete archive downloads continue to work for that historical snapshot.
+- Any known commit SHA can also be entered directly in the top ref field.
 
-The scanner reports review leads—not unverified claims of exploitability—for patterns such as:
+### Releases, APKs, and attached files
 
-- hard-coded credential formats and secret assignments;
-- dynamic code execution and unsafe shell construction;
-- disabled TLS verification;
-- unsafe object deserialization;
-- SQL interpolation and path-sensitive file operations;
-- browser HTML injection sinks and token storage;
-- wildcard CORS and production debug flags;
-- weak security hashes and container root-user signals;
-- broad/unpinned runtime dependency ranges.
+- Up to 20 published releases and 100 assets per release.
+- APK, AAB, ZIP, TAR, and other release assets with name, MIME type, size, and download count.
+- Asset links are accepted only when they are HTTPS URLs on `github.com` under the selected repository's release-download path.
+- Downloads are served directly by GitHub; the Space does not copy large release binaries.
 
-Every lead includes severity, rule ID, location, redacted evidence, confidence, and a defensive recommendation. The AI is told to verify each heuristic against supplied context before including it as a material finding.
+### GitHub Actions
 
-### Dependency inventory
+- Latest 40 public workflow runs with status, conclusion, branch, event, and official run link.
+- Retained artifact metadata with name, ZIP size, expiry, and official artifact/run page.
+- Public artifact metadata can be listed anonymously. GitHub requires Actions-read authentication for artifact download, so RepoVault opens GitHub's official page and lets GitHub enforce sign-in.
+- The Space never asks visitors for a personal access token and never uses an owner credential to anonymously expose protected artifacts.
 
-Safe text parsers support:
+### AI review workspace
 
-- npm-compatible `package.json` files;
-- Python `requirements.txt` and `pyproject.toml` (PEP 621 and Poetry sections);
-- Rust `Cargo.toml`;
-- Go `go.mod`;
-- PHP Composer;
-- Ruby Gemfile;
-- Maven and Gradle;
-- Dart/Flutter pubspec.
+The original production review engine remains available in tab 06:
 
-No dependency is installed and no repository script is run. The inventory does not pretend to be a live vulnerability database; the generated validation plan directs maintainers to current ecosystem advisory tooling.
-
-### AI report and workflow
-
-Qwen2.5-Coder-3B-Instruct runs locally on Hugging Face ZeroGPU and returns a structured report with:
-
-1. Executive summary
-2. Prioritized findings
-3. Architecture impact
-4. Suggested unified diff
-5. Validation plan
-6. Risks and unknowns
-
-A completed review can be refined using the same immutable repository snapshot. The application exports:
-
-- a complete Markdown report;
-- a `.patch` file when the model returns a valid unified diff;
-- machine-readable JSON without raw source contents or the full model prompt.
-
-Temporary exports are private-mode files under `/tmp`, are bounded in number, and expire after two hours.
+- comprehensive, bug, defensive security, performance, architecture, testing, and documentation modes;
+- optional base→review-branch comparison;
+- deterministic architecture, symbol, dependency, test/docs/CI, and static-review intelligence;
+- bounded, relevance-ranked source evidence;
+- secret redaction and source prompt-injection neutralization;
+- local Qwen Coder inference on ZeroGPU;
+- Markdown, validated patch, and machine-readable JSON exports.
 
 ## Deliberate safety boundary
 
-This public Space **does not**:
+RepoVault is a public, read-only data viewer. It does **not**:
 
-- clone or execute repository code;
-- invoke a shell, compiler, package manager, build, or test command from user input;
-- accept arbitrary network hosts or act as a proxy/tunnel;
-- read private repositories;
-- request a visitor's GitHub or Hugging Face token;
-- write, commit, push, open pull requests, merge, or deploy visitor repositories;
-- expose raw repository source in exported reports;
-- produce clearly malicious, phishing, credential-theft, unauthorized-access, spam, cryptomining, destructive, or evasion tooling.
+- clone, import, compile, build, test, install, execute, or extract repository-controlled content;
+- execute APKs, workflow jobs, release files, or Actions artifacts;
+- accept arbitrary network hosts, follow API redirects, or operate as a proxy/tunnel;
+- read private repositories or request visitor credentials;
+- write, commit, push, open pull requests, merge, publish releases, or trigger workflows;
+- proxy common credential/private-key filenames;
+- use an owner token to grant anonymous visitors access to protected GitHub content.
 
-Repository text is explicitly marked as untrusted evidence. Strong embedded instructions such as “ignore previous instructions” are replaced before inference. Recognized GitHub, Hugging Face, cloud, Slack, JWT, database URI, private-key, and secret-assignment formats are redacted both before inference and after generation.
-
-These constraints preserve the product as a legitimate ML code-review application rather than a public remote-management or arbitrary-code-execution service.
+GitHub source archives and release assets remain first-party GitHub downloads. This prevents the Space from becoming an unbounded large-file relay while preserving complete-repository and release download functionality.
 
 See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) for trust boundaries and abuse cases.
 
 ## Architecture
 
 ```text
-Gradio UI
+Gradio repository-first UI
   │
-  ├── canonical input + request safety policy
+  ├── strict public GitHub repository + ref validation
   │
-  ├── read-only GitHub REST client ── bounded TTL cache
-  │       ├── repository metadata
-  │       ├── commit/tree snapshot
-  │       └── selected Contents API blobs
+  ├── bounded GitHub REST client ── short TTL/LRU cache
+  │       ├── metadata + recursive tree snapshot
+  │       ├── commits + changed-file details
+  │       ├── releases + attached assets
+  │       ├── workflow runs + artifact metadata
+  │       └── exact Git blob bytes
   │
-  ├── repository intelligence pipeline
-  │       ├── path safety + relevance ranking
-  │       ├── secret and prompt-injection sanitization
-  │       ├── language/profile/symbol extraction
-  │       ├── dependency manifest parsing
-  │       └── deterministic static review leads
+  ├── RepoVault service
+  │       ├── path search + file metadata
+  │       ├── safe text/binary preview decision
+  │       ├── individual ephemeral download
+  │       ├── bounded selected-file ZIP
+  │       └── immutable GitHub archive/release/run links
   │
-  ├── trust-separated professional prompt
-  │
-  ├── Qwen Coder generation inside @spaces.GPU
-  │
-  └── final redaction + Markdown/patch/JSON exports
+  └── secondary AI review workspace
+          ├── sanitized repository intelligence
+          ├── Qwen Coder inside @spaces.GPU
+          └── expiring report/patch/JSON exports
 ```
 
-Detailed component responsibilities and data flow are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Detailed component responsibilities are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Runtime limits
 
 | Control | Current bound |
 |---|---:|
 | Recursive tree | 20,000 files |
-| Branch comparison metadata | 300 changed files |
-| Selectable evidence | 3–14 files |
-| Source read per file | 24,000 bytes |
-| Quick context | 22,000 characters |
-| Standard context | 36,000 characters |
-| Deep context | 48,000 characters |
-| User request | 6,000 characters |
-| Model input | 15,000 tokens by default |
-| Model output | 1,200 tokens by default |
-| Static findings | 50 per analysis |
-| Dependency records | 800 per analysis |
+| File paths displayed per search | 1,000 |
+| File table rows per search | 500 |
+| Text preview | 300,000 bytes |
+| Individual proxied file | 25,000,000 bytes |
+| Selected files per ZIP | 20 |
+| Selected ZIP uncompressed input | 50,000,000 bytes |
+| Recent commits | 50 |
+| Changed files per commit detail | 300 |
+| Published releases | 20 |
+| Assets per release | 100 |
+| Workflow runs | 40 |
+| Artifacts per run | 100 |
+| Vault temporary download retention | 2 hours / 120 files |
+| AI evidence | 3–14 files |
+| AI context | 22,000–48,000 characters |
+| AI model output | 256–2,000 tokens |
 | ZeroGPU allocation | 55 seconds per generation |
-| Export retention | 2 hours, up to 120 files |
 
-These are safety and reliability ceilings, not billing promises. Public GitHub API and ZeroGPU account quotas still apply.
+GitHub API quotas and GitHub's own retention/authentication rules still apply.
 
 ## Runtime configuration
 
-The application requires no visitor API key for public repositories or for the local model.
+No visitor API key is required.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MODEL_ID` | `Qwen/Qwen2.5-Coder-3B-Instruct` | Public Transformers model |
-| `MAX_INPUT_TOKENS` | `15000` | Model input ceiling; clamped to 4,096–24,000 |
-| `MAX_NEW_TOKENS` | `1200` | Generated token ceiling; clamped to 256–2,000 |
-| `GITHUB_TOKEN` | unset | Optional owner-configured read-only token for a higher public GitHub API limit |
-| `REPORT_DIRECTORY` | `/tmp/taj-ai-reports` | Ephemeral export directory |
+| `MODEL_ID` | `Qwen/Qwen2.5-Coder-3B-Instruct` | Secondary AI workspace model |
+| `MAX_INPUT_TOKENS` | `15000` | AI model input ceiling |
+| `MAX_NEW_TOKENS` | `1200` | AI model output ceiling |
+| `GITHUB_TOKEN` | unset | Optional owner-configured read-only token for higher public API quota |
+| `VAULT_DIRECTORY` | `/tmp/taj-repovault` | Ephemeral individual/selected downloads |
+| `REPORT_DIRECTORY` | `/tmp/taj-ai-reports` | Ephemeral AI exports |
 
-If `GITHUB_TOKEN` is configured by the Space owner, it should be a fine-grained **read-only** Space secret. The product still rejects repositories reported as private so a public visitor can never use an owner credential to expose private source.
+If `GITHUB_TOKEN` is configured by the Space owner, it must be a fine-grained read-only Space secret. The application checks repository visibility and rejects private repositories before tree or blob access.
 
-## Automatic deployment
+## Local validation
 
-`.github/workflows/sync-to-huggingface.yml` validates the source, mirrors GitHub to Hugging Face with the official `huggingface/hub-sync` action, and requests ZeroGPU after each push to `main` or `arena/01a00b5b-huggingface`.
-
-- **Space:** [`madarauchihagmailcom/My`](https://huggingface.co/spaces/madarauchihagmailcom/My)
-- **SDK:** Gradio
-- **Hardware:** ZeroGPU (`zero-a10g`)
-
-The workflow authenticates with the GitHub Actions secret `HF_TOKEN`. It must remain a fine-grained Hugging Face token restricted to read/write access for this one Space. Never commit it, print it, paste it into chat, or expose it as a Space variable.
-
-Operational checks and rollback guidance are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
-
-## Local development
-
-Python 3.12.12 matches the Space runtime.
+Core tests need only Requests and the standard library:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python app.py
-```
-
-The core intelligence test suite requires only Requests and standard-library modules:
-
-```bash
-python -m pip install "requests>=2.32.0,<3.0.0"
-python -m unittest discover -s tests -v
+.venv/bin/pip install "requests>=2.32,<3" "ruff>=0.11,<1"
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/ruff check app.py code_assistant tests scripts
 python -m compileall -q app.py code_assistant scripts tests
 ```
 
-The test suite covers canonical repository parsing, network failure handling, cache expiration and eviction, path policy, request safety, secret redaction, prompt-injection neutralization, static rules, language and symbol extraction, relevance ranking, dependency parsers, context budgets, prompt trust boundaries, and safe report exports.
+The Hugging Face runtime manages Gradio, PyTorch, Spaces, and `huggingface_hub`. Application dependencies are listed in `requirements.txt`.
 
-## Project structure
+## Automatic deployment
 
-```text
-app.py                              Gradio Pro UI and ZeroGPU generation
-code_assistant/cache.py             Bounded thread-safe TTL/LRU cache
-code_assistant/dependencies.py      Non-executing manifest parsers
-code_assistant/domain.py            Typed immutable domain models
-code_assistant/github_client.py     Hardened read-only GitHub REST client
-code_assistant/inspection.py        Languages, profile, symbols, architecture
-code_assistant/presentation.py      UI/report Markdown renderers
-code_assistant/prompting.py         Trust-separated review/refinement prompts
-code_assistant/ranking.py           Deterministic evidence ranking
-code_assistant/reporting.py         Expiring Markdown/patch/JSON exports
-code_assistant/repository.py        End-to-end preparation orchestrator
-code_assistant/security.py          Policy, sanitization, static review rules
-scripts/configure_space.py          ZeroGPU configuration after deployment
-tests/                              Unit and pipeline regression tests
-docs/                               Architecture, threat model, operations
-```
+`.github/workflows/sync-to-huggingface.yml` validates every push to `main` or `arena/01a00b5b-huggingface`, mirrors the exact revision to `madarauchihagmailcom/My` with the official Hub Sync action, and requests ZeroGPU.
 
-## Contributing and security
+The only deployment credential is the GitHub Actions secret `HF_TOKEN`, scoped to the target Space. It is never stored in source or shown to visitors.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing review rules or trust boundaries. Report security issues using the process in [`SECURITY.md`](SECURITY.md); do not place credentials, private repository source, or exploitable details in a public issue.
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, data flow, and extension rules
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — trust zones, abuse cases, and controls
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — deployment, verification, troubleshooting, and rollback
+- [`SECURITY.md`](SECURITY.md) — vulnerability reporting and security commitments
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — change and validation requirements
 
 ## License
 

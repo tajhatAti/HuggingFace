@@ -25,10 +25,14 @@ Verify in this order:
 4. `Request free ZeroGPU hardware` passed.
 5. Space metadata reports SDK `gradio` and requested/current hardware `zero-a10g`.
 6. Runtime stage reaches `RUNNING`.
-7. Space homepage renders the Pro header and review controls.
-8. Static inspection of a small known public repository populates all deterministic tabs.
-9. One Standard AI review returns a structured report.
-10. Markdown and JSON download; patch appears only when the report contains a valid unified diff.
+7. Space homepage renders the GitHub Repository Vault header and repository search dock.
+8. Open a small known public repository; Explorer shows an exact commit, file table, history, releases, and Actions panels.
+9. Preview/download one text file, create a small selected ZIP, and verify the ZIP contains only selected paths plus the manifest.
+10. Verify complete ZIP/TAR links point directly to `github.com` and contain the exact commit SHA.
+11. Open a historical commit snapshot and verify Explorer/archive links change to that commit.
+12. Verify release assets and Actions artifacts use official GitHub links; protected Actions downloads may require GitHub sign-in.
+13. Run static inspection and one Standard review in the secondary AI workspace.
+14. Confirm AI Markdown/JSON downloads; patch appears only when the model returns a valid unified diff.
 
 Do not call deployment successful solely because GitHub Actions is green: Hugging Face build and startup are separate stages.
 
@@ -61,7 +65,15 @@ The deterministic tabs should remain usable. Check container logs for model down
 
 ### Runtime: GitHub rate limit
 
-Anonymous GitHub REST usage is limited. Wait for reset or configure an owner-controlled fine-grained read-only token. The application must continue rejecting private repositories even if the token can see them.
+Anonymous GitHub REST usage is limited. One initial Vault load requests metadata, tree, commits, releases, and workflow runs; file previews/ZIPs add blob requests. Wait for reset or configure an owner-controlled fine-grained read-only token. The application must continue rejecting private repositories even if the token can see them. Never use the token to provide anonymous protected Actions downloads.
+
+### Actions artifact link requests sign-in
+
+This is expected. Public run/artifact metadata is anonymously readable, but GitHub's artifact download endpoint requires Actions-read authentication. The product deliberately opens the official GitHub page rather than collecting a visitor token or proxying an owner credential.
+
+### Selected ZIP fails
+
+Check the user-facing reason: 20-file count, 25 MB per file, 50 MB total, sensitive credential/key path, missing historical blob, or GitHub quota. Do not increase public limits without measuring memory/compression/API effects and updating the threat model.
 
 ### Runtime: long queue
 
@@ -108,9 +120,11 @@ Do not maintain two long-lived active deployment tokens longer than necessary.
 ## Capacity and storage
 
 - Model weights are managed by the Hugging Face runtime/cache.
-- Repository source is held only in bounded process memory and Gradio session state.
-- Public metadata/source cache has finite entries and TTL.
-- Exports use `/tmp/taj-ai-reports`, 0600 files, two-hour retention, and a 120-file cap.
+- Repository trees and listing records are held only in bounded process memory and Gradio session state.
+- Public metadata/source cache has finite entries and TTL; large Git blob byte responses are not globally cached.
+- Individual and selected-file downloads use `/tmp/taj-repovault`, restrictive permissions, two-hour retention, and a 120-file cap.
+- AI exports use `/tmp/taj-ai-reports` with the same retention/count policy.
+- Full repository archives, release assets, and Actions downloads are not stored by the Space.
 - No database, vector store, repository clone, or long-lived worker is required.
 
 The design should not attempt to consume all available RAM or disk. Production reliability requires headroom for the runtime, model, concurrent sessions, dependency installation, and build layers.

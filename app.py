@@ -1,4 +1,4 @@
-"""Taj AI Code Assistant Pro — safe production repository intelligence on ZeroGPU."""
+"""Taj GitHub Repository Vault with a safe secondary ZeroGPU review workspace."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from code_assistant.domain import AnalysisMode, PreparedAnalysis, ReviewDepth
-from code_assistant.github_client import GitHubError
+from code_assistant.github_client import GitHubClient, GitHubError
 from code_assistant.presentation import (
     render_architecture,
     render_dependencies,
@@ -29,9 +29,30 @@ from code_assistant.repository import (
     prepare_analysis,
 )
 from code_assistant.security import sanitize_model_output
+from code_assistant.vault import (
+    MAX_SELECTED_FILES,
+    MAX_VAULT_TREE_FILES,
+    VaultSession,
+    archive_links_markdown,
+    build_selected_zip,
+    commit_choices,
+    commits_table,
+    file_page_status,
+    files_table,
+    filter_files,
+    inspect_file,
+    load_commit_snapshot,
+    load_vault,
+    render_actions,
+    render_artifacts,
+    render_commit_detail,
+    render_releases,
+    repository_dashboard,
+    workflow_choices,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s :: %(message)s")
-log = logging.getLogger("taj-ai-pro")
+log = logging.getLogger("taj-repovault")
 
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
 MAX_INPUT_TOKENS = max(4_096, min(int(os.getenv("MAX_INPUT_TOKENS", "15000")), 24_000))
@@ -239,273 +260,693 @@ def generate_refined_review(prompt: str) -> str:
         return f"## Refinement error\n\n`{type(exc).__name__}: {sanitize_model_output(str(exc), 500)}`"
 
 
+def _dropdown(choices, value=None, *, multiselect: bool = False):
+    """Return a Gradio component-update object compatible with Gradio 6."""
+
+    return gr.Dropdown(choices=choices, value=value, multiselect=multiselect)
+
+
+def _require_vault(session: VaultSession | None) -> VaultSession:
+    if session is None:
+        raise ValueError("প্রথমে একটি public GitHub repository load করুন।")
+    return session
+
+
+def load_vault_ui(repo_value: str, ref_value: str):
+    """Load all repository-first views without executing or cloning source."""
+
+    try:
+        session = load_vault(repo_value, ref_value)
+        paths = filter_files(session)
+        commit_options = commit_choices(session)
+        run_options = workflow_choices(session)
+        status = (
+            f"✅ **Vault ready** · `{session.repo.full_name}` · `{session.requested_ref}` @ "
+            f"`{session.exact_ref[:12]}` · {len(session.files):,} files"
+        )
+        return (
+            session,
+            repository_dashboard(session),
+            files_table(session, page=1),
+            1,
+            _dropdown(paths, paths[0] if paths else None),
+            _dropdown(paths, [], multiselect=True),
+            archive_links_markdown(session),
+            commits_table(session),
+            _dropdown(commit_options, commit_options[0][1] if commit_options else None),
+            "## Commit details\n\nSelect a commit to inspect changed files or open its exact snapshot.",
+            render_releases(session),
+            render_actions(session),
+            _dropdown(run_options, run_options[0][1] if run_options else None),
+            "## Run artifacts\n\nSelect a workflow run to list retained artifacts.",
+            "## File preview\n\nSelect a file from the explorer.",
+            "",
+            None,
+            None,
+            "Ready to create a bounded selected-file ZIP.",
+            status,
+        )
+    except (GitHubError, ValueError) as exc:
+        message = str(exc)
+    except Exception:
+        log.exception("Unexpected RepoVault load error")
+        message = "Unexpected repository load error হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।"
+    return (
+        None,
+        f"## Repository unavailable\n\n❌ {message}",
+        [],
+        1,
+        _dropdown([], None),
+        _dropdown([], [], multiselect=True),
+        "## Complete snapshot\n\nLoad a repository first.",
+        [],
+        _dropdown([], None),
+        "## Commit details\n\nNo commit selected.",
+        "## Releases & attached files\n\nNo repository loaded.",
+        "## GitHub Actions runs\n\nNo repository loaded.",
+        _dropdown([], None),
+        "## Run artifacts\n\nNo repository loaded.",
+        "## File preview\n\nNo repository loaded.",
+        "",
+        None,
+        None,
+        "No ZIP created.",
+        f"❌ **{message}**",
+    )
+
+
+def filter_vault_files_ui(
+    session: VaultSession | None,
+    query: str,
+    page: int,
+    selected: list[str] | None,
+):
+    try:
+        resolved = _require_vault(session)
+        bounded_page = min(MAX_VAULT_TREE_FILES, max(1, int(page or 1)))
+        paths = filter_files(resolved, query)
+        retained = [path for path in (selected or []) if path in paths]
+        note = f"✅ {file_page_status(resolved, query, bounded_page)}"
+        if len(paths) == 1_000:
+            note += " · Preview/ZIP dropdown shows the first 1,000 matches; narrow the search to reach another path."
+        return (
+            files_table(resolved, query, page=bounded_page),
+            _dropdown(paths, paths[0] if paths else None),
+            _dropdown(paths, retained, multiselect=True),
+            note,
+        )
+    except (GitHubError, ValueError, TypeError) as exc:
+        return [], _dropdown([], None), _dropdown([], [], multiselect=True), f"❌ {exc}"
+
+
+def preview_file_ui(session: VaultSession | None, path: str):
+    try:
+        preview = inspect_file(_require_vault(session), path)
+        return preview.markdown, preview.content, preview.download_path, f"✅ Loaded `{preview.path}`"
+    except (GitHubError, ValueError) as exc:
+        return "## File unavailable\n\nPreview failed.", "", None, f"❌ {exc}"
+    except Exception:
+        log.exception("Unexpected file preview error")
+        return "## File unavailable\n\nPreview failed.", "", None, "❌ Unexpected file preview error."
+
+
+def selected_zip_ui(session: VaultSession | None, selected: list[str] | None):
+    try:
+        archive_path, status = build_selected_zip(_require_vault(session), selected)
+        return archive_path, status
+    except (GitHubError, ValueError) as exc:
+        return None, f"❌ {exc}"
+    except Exception:
+        log.exception("Unexpected selected ZIP error")
+        return None, "❌ Unexpected ZIP creation error."
+
+
+def commit_detail_ui(session: VaultSession | None, sha: str):
+    try:
+        resolved = _require_vault(session)
+        detail = GitHubClient().commit_detail(resolved.repo, sha)
+        return render_commit_detail(detail, resolved), f"✅ Commit `{sha[:12]}` loaded"
+    except (GitHubError, ValueError) as exc:
+        return "## Commit unavailable\n\nCould not load commit details.", f"❌ {exc}"
+
+
+def load_commit_snapshot_ui(session: VaultSession | None, sha: str):
+    try:
+        updated = load_commit_snapshot(_require_vault(session), sha)
+        paths = filter_files(updated)
+        return (
+            updated,
+            repository_dashboard(updated),
+            files_table(updated, page=1),
+            1,
+            _dropdown(paths, paths[0] if paths else None),
+            _dropdown(paths, [], multiselect=True),
+            archive_links_markdown(updated),
+            updated.requested_ref,
+            "## File preview\n\nHistorical snapshot loaded. Select a file to preview or download it.",
+            "",
+            None,
+            None,
+            f"✅ **Historical snapshot ready** · commit `{updated.exact_ref[:12]}` · {len(updated.files):,} files",
+        )
+    except (GitHubError, ValueError) as exc:
+        raise gr.Error(str(exc)) from exc
+
+
+def run_artifacts_ui(session: VaultSession | None, run_value: str):
+    try:
+        resolved = _require_vault(session)
+        run_id = int(run_value)
+        artifacts = GitHubClient().list_run_artifacts(resolved.repo, run_id)
+        return render_artifacts(resolved, artifacts, run_id), f"✅ {len(artifacts)} retained artifact(s) found"
+    except (GitHubError, ValueError, TypeError) as exc:
+        return "## Run artifacts unavailable\n\nCould not load artifact metadata.", f"❌ {exc}"
+
+
 CSS = """
 :root {
-  --taj-ink: #0f172a;
-  --taj-muted: #475569;
-  --taj-line: rgba(100, 116, 139, .22);
-  --taj-indigo: #4f46e5;
-  --taj-cyan: #0891b2;
+  --vault-ink: #17201d;
+  --vault-muted: #66736e;
+  --vault-paper: #fbfaf5;
+  --vault-card: rgba(255, 255, 255, .82);
+  --vault-line: rgba(37, 59, 51, .14);
+  --vault-green: #0f766e;
+  --vault-dark: #10251f;
+  --vault-amber: #f59e0b;
 }
-.gradio-container { max-width: 1440px !important; margin: 0 auto !important; padding-bottom: 48px !important; }
-.hero-pro {
-  position: relative; overflow: hidden; padding: 34px 36px; border-radius: 28px; margin: 8px 0 20px;
-  color: #f8fafc; background:
-    radial-gradient(circle at 84% 12%, rgba(34,211,238,.32), transparent 25%),
-    radial-gradient(circle at 10% 90%, rgba(129,140,248,.25), transparent 28%),
-    linear-gradient(135deg, #0f172a 0%, #312e81 52%, #155e75 100%);
-  box-shadow: 0 26px 70px rgba(15,23,42,.24);
+.gradio-container {
+  max-width: 1520px !important;
+  margin: 0 auto !important;
+  padding: 18px 24px 56px !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(16, 185, 129, .08), transparent 24%),
+    radial-gradient(circle at 94% 8%, rgba(245, 158, 11, .09), transparent 20%);
 }
-.hero-pro:after { content:""; position:absolute; inset:0; opacity:.16; pointer-events:none;
-  background-image: linear-gradient(rgba(255,255,255,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.2) 1px, transparent 1px);
-  background-size: 28px 28px; mask-image: linear-gradient(to left, #000, transparent 72%); }
-.hero-pro h1 { position:relative; z-index:1; margin:0 0 10px; font-size:clamp(31px,5vw,54px); letter-spacing:-2px; line-height:1.04; }
-.hero-pro p { position:relative; z-index:1; max-width:840px; margin:0; color:#dbeafe; font-size:16px; line-height:1.7; }
-.hero-badges { position:relative; z-index:1; display:flex; gap:8px; flex-wrap:wrap; margin-top:20px; }
-.hero-badge { padding:7px 11px; border:1px solid rgba(255,255,255,.23); border-radius:999px; background:rgba(255,255,255,.10); backdrop-filter:blur(8px); font-size:12px; font-weight:600; }
-.input-panel, .output-shell { border:1px solid var(--taj-line) !important; border-radius:22px !important; box-shadow:0 14px 38px rgba(15,23,42,.07) !important; }
-.input-panel { padding:18px !important; }
-.status-strip { border-left:4px solid #22c55e !important; padding:12px 16px !important; border-radius:12px !important; }
-#review-btn { background:linear-gradient(90deg,#4f46e5,#0891b2) !important; color:white !important; border:0 !important; font-weight:700 !important; box-shadow:0 10px 24px rgba(79,70,229,.24) !important; }
-#inspect-btn { border:1px solid rgba(79,70,229,.35) !important; }
-#refine-btn { background:linear-gradient(90deg,#0f766e,#0891b2) !important; color:white !important; border:0 !important; }
-.pro-note { border-left:4px solid #6366f1 !important; }
-.tab-nav button { font-weight:650 !important; }
-footer { display:none !important; }
-@media (max-width: 760px) { .hero-pro { padding:26px 22px; border-radius:22px; } .hero-pro h1 { letter-spacing:-1px; } }
+.vault-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 230px;
+  margin: 2px 0 18px;
+  padding: 38px 42px;
+  border-radius: 30px;
+  color: #f8fffb;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(251, 191, 36, .28), transparent 19%),
+    linear-gradient(125deg, #0b1e19 0%, #123d31 58%, #1c5a49 100%);
+  box-shadow: 0 30px 80px rgba(12, 36, 29, .22);
+}
+.vault-hero:after {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  right: -90px;
+  bottom: -240px;
+  border: 42px solid rgba(255,255,255,.06);
+  border-radius: 50%;
+}
+.eyebrow {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 15px;
+  color: #fcd34d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.vault-hero h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0;
+  font-size: clamp(38px, 6vw, 72px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+.vault-hero p {
+  position: relative;
+  z-index: 1;
+  max-width: 830px;
+  margin: 18px 0 0;
+  color: #d5e9e1;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.vault-badges {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 22px;
+}
+.vault-badge {
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+.search-dock, .vault-shell, .mini-panel {
+  border: 1px solid var(--vault-line) !important;
+  background: var(--vault-card) !important;
+  box-shadow: 0 16px 40px rgba(22, 45, 37, .07) !important;
+  backdrop-filter: blur(12px);
+}
+.search-dock { padding: 16px !important; border-radius: 22px !important; }
+.vault-shell { border-radius: 24px !important; overflow: hidden; }
+.mini-panel { padding: 16px !important; border-radius: 18px !important; }
+#vault-load, #selected-zip, #ai-review, #browse-snapshot {
+  color: white !important;
+  border: 0 !important;
+  font-weight: 800 !important;
+  background: linear-gradient(100deg, #0f766e, #14532d) !important;
+  box-shadow: 0 11px 24px rgba(15,118,110,.20) !important;
+}
+#vault-status {
+  margin: 12px 0 16px;
+  padding: 11px 15px;
+  border-left: 4px solid #10b981 !important;
+  border-radius: 10px !important;
+  background: rgba(236,253,245,.74) !important;
+}
+#file-content textarea {
+  min-height: 480px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+}
+.tab-nav button { font-weight: 750 !important; letter-spacing: -.01em; }
+.section-kicker { color: var(--vault-green); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.safety-callout { border-left: 4px solid #f59e0b !important; }
+footer { display: none !important; }
+@media (max-width: 760px) {
+  .gradio-container { padding: 10px 10px 40px !important; }
+  .vault-hero { padding: 28px 22px; border-radius: 24px; }
+  .vault-hero h1 { letter-spacing: -.04em; }
+}
 """
 
 HEADER = """
-<div class="hero-pro">
-  <h1>Taj AI Code Assistant <span style="color:#67e8f9">Pro</span></h1>
-  <p>Production-grade, read-only repository intelligence: architecture, dependency inventory, deterministic security leads, symbol-aware evidence selection, professional AI review, and downloadable patch/report—without executing repository code.</p>
-  <div class="hero-badges">
-    <span class="hero-badge">🔎 Public GitHub intelligence</span>
-    <span class="hero-badge">🧭 Architecture + symbols</span>
-    <span class="hero-badge">🛡️ Secret & injection defense</span>
-    <span class="hero-badge">🧠 Qwen Coder on ZeroGPU</span>
-    <span class="hero-badge">📦 Markdown · Patch · JSON</span>
+<div class="vault-hero">
+  <div class="eyebrow">Repository intelligence, redesigned</div>
+  <h1>GitHub Repository <span style="color:#fcd34d">Vault.</span></h1>
+  <p>Open any public repository as an immutable workspace. Explore and preview files, package a selection, download complete snapshots, travel through commit history, collect release assets, and find retained Actions artifacts—without cloning or executing a single line.</p>
+  <div class="vault-badges">
+    <span class="vault-badge">◉ Public repositories</span>
+    <span class="vault-badge">⌘ Any commit snapshot</span>
+    <span class="vault-badge">↓ APK · ZIP · release assets</span>
+    <span class="vault-badge">◇ Read-only by design</span>
+    <span class="vault-badge">✦ AI review workspace included</span>
   </div>
 </div>
 """
 
 MODEL_STATUS = (
-    f"✅ Model initialized: `{MODEL_ID}`"
+    f"Model ready: {MODEL_ID}"
     if MODEL is not None
-    else "⚠️ Model unavailable; deterministic repository intelligence still works."
+    else "AI model unavailable; every RepoVault feature still works without it."
 )
 
 empty_overview, empty_evidence, empty_findings, empty_architecture, empty_dependencies = render_empty_state()
 
-theme = gr.themes.Soft(
-    primary_hue="indigo",
-    secondary_hue="cyan",
-    neutral_hue="slate",
+theme = gr.themes.Base(
+    primary_hue="emerald",
+    secondary_hue="amber",
+    neutral_hue="zinc",
     radius_size="lg",
 )
 
-with gr.Blocks(css=CSS, theme=theme, title="Taj AI Code Assistant Pro", analytics_enabled=False) as demo:
+with gr.Blocks(title="GitHub Repository Vault", analytics_enabled=False) as demo:
     gr.HTML(HEADER)
+    vault_state = gr.State(value=None)
     analysis_state = gr.State(value=None)
     refinement_prompt_state = gr.State(value="")
 
-    with gr.Row(equal_height=False):
-        with gr.Column(scale=4, elem_classes=["input-panel"]):
-            gr.Markdown("### Review configuration")
-            repo_input = gr.Textbox(
-                label="Public GitHub repository",
-                value="tajhatAti/Claude",
-                placeholder="owner/repository অথবা https://github.com/owner/repository",
-            )
-            with gr.Row():
-                branch_input = gr.Textbox(label="Review branch (ফাঁকা = default)", placeholder="feature/login")
-                comparison_base_input = gr.Textbox(
-                    label="Compare base (optional)",
-                    placeholder="main",
-                )
-            task_input = gr.Textbox(
-                label="কী review/change চান?",
-                placeholder="যেমন: Authentication flow security review করে minimal production patch suggest করো",
-                lines=7,
-            )
-            with gr.Row():
-                mode_input = gr.Dropdown(
-                    choices=[mode.value for mode in AnalysisMode],
-                    value=AnalysisMode.COMPREHENSIVE.value,
-                    label="Review mode",
-                )
-                depth_input = gr.Radio(
-                    choices=[depth.value for depth in ReviewDepth],
-                    value=ReviewDepth.STANDARD.value,
-                    label="Depth",
-                )
-            file_limit = gr.Slider(3, 14, value=8, step=1, label="Maximum evidence files")
-            review_button = gr.Button("Run professional AI review", variant="primary", elem_id="review-btn")
-            inspect_button = gr.Button("Static inspection only (no GPU quota)", variant="secondary", elem_id="inspect-btn")
-            gr.Markdown(
-                """**Safety boundary**
+    with gr.Row(equal_height=True, elem_classes=["search-dock"]):
+        vault_repo_input = gr.Textbox(
+            label="Public GitHub repository URL",
+            value="https://github.com/tajhatAti/ai",
+            placeholder="https://github.com/owner/repository",
+            scale=7,
+        )
+        vault_ref_input = gr.Textbox(
+            label="Branch, tag, or commit (optional)",
+            placeholder="default branch",
+            scale=3,
+        )
+        vault_load_button = gr.Button("Open repository", variant="primary", scale=2, elem_id="vault-load")
 
-- Public repositories only
-- No clone, shell, package install, or code execution
-- No GitHub write, commit, PR, or deployment access
-- Secret-like values are removed before AI processing
-- Embedded prompt-injection lines are neutralized""",
-                elem_classes=["pro-note"],
-            )
+    vault_status = gr.Markdown(
+        "Paste a public GitHub URL to build a bounded, read-only repository workspace.",
+        elem_id="vault-status",
+    )
 
-        with gr.Column(scale=8, elem_classes=["output-shell"]):
-            operation_status = gr.Markdown(
-                f"Ready for a bounded read-only review.  \n{MODEL_STATUS}",
-                elem_classes=["status-strip"],
+    with gr.Tabs(elem_classes=["tab-nav"]):
+        with gr.Tab("01  Explorer"):
+            vault_dashboard = gr.Markdown(
+                "## Your repository workspace\n\nLoad a repository to see files, metadata, releases, history, and Actions runs."
             )
-            with gr.Tabs(elem_classes=["tab-nav"]):
-                with gr.Tab("AI Review"):
-                    review_result = gr.Markdown(
-                        "## AI review\n\nConfigure a repository and run a professional review.",
-                        line_breaks=True,
-                    )
-                    with gr.Accordion("Refine this review using the same snapshot", open=False):
-                        followup_input = gr.Textbox(
-                            label="Follow-up request",
-                            placeholder="যেমন: Patch-টি backward-compatible করে tests আরও specific করো",
-                            lines=3,
+            with gr.Row(equal_height=False):
+                with gr.Column(scale=4, elem_classes=["mini-panel"]):
+                    gr.Markdown('<div class="section-kicker">Find a file</div>')
+                    with gr.Row():
+                        file_query = gr.Textbox(
+                            label="Filter paths",
+                            placeholder="src auth .py",
+                            scale=4,
                         )
-                        refine_button = gr.Button("Refine full report", elem_id="refine-btn")
-                with gr.Tab("Repository"):
-                    repository_overview = gr.Markdown(empty_overview)
-                with gr.Tab("Findings"):
-                    deterministic_findings = gr.Markdown(empty_findings, line_breaks=True)
-                with gr.Tab("Architecture"):
-                    architecture_map = gr.Markdown(empty_architecture, line_breaks=True)
-                with gr.Tab("Dependencies"):
-                    dependency_inventory = gr.Markdown(empty_dependencies, line_breaks=True)
-                with gr.Tab("Evidence"):
-                    evidence_files = gr.Markdown(empty_evidence, line_breaks=True)
-                with gr.Tab("Export"):
-                    gr.Markdown(
-                        "### Download verified artifacts\nReports exclude raw source content and full prompts. Review every patch before applying it."
+                        file_page = gr.Number(
+                            label="Page",
+                            value=1,
+                            minimum=1,
+                            step=1,
+                            precision=0,
+                            scale=1,
+                        )
+                    file_filter_button = gr.Button("Search / show page")
+                    file_browser = gr.Dropdown(
+                        label="File to preview",
+                        choices=[],
+                        filterable=True,
                     )
-                    markdown_report = gr.File(label="Complete Markdown report", interactive=False)
-                    patch_report = gr.File(label="Unified diff patch (when valid)", interactive=False)
-                    json_report = gr.File(label="Machine-readable JSON report", interactive=False)
+                    file_preview_button = gr.Button("Preview & prepare download", variant="primary")
+                    preview_download = gr.File(label="Download this file", interactive=False)
+                with gr.Column(scale=8):
+                    file_info = gr.Markdown("## File preview\n\nSelect a file after loading a repository.")
+                    file_content = gr.Textbox(
+                        label="Safe text preview",
+                        lines=26,
+                        max_lines=34,
+                        interactive=False,
+                        elem_id="file-content",
+                    )
+            gr.Markdown("### Snapshot file index")
+            file_table = gr.Dataframe(
+                headers=["Path", "Type", "Size", "Blob", "Proxy"],
+                datatype=["str", "str", "str", "str", "str"],
+                value=[],
+                interactive=False,
+                wrap=True,
+            )
 
-    gr.Examples(
-        examples=[
-            [
-                "tajhatAti/ai",
-                "main",
-                "",
-                "Runtime failure এবং missing architecture review করে minimal production fix suggest করো",
-                AnalysisMode.BUG_HUNT.value,
-                ReviewDepth.STANDARD.value,
-                8,
-            ],
-            [
-                "tajhatAti/Claude",
-                "claude",
-                "",
-                "Authentication, authorization এবং secret handling defensive security audit করো",
-                AnalysisMode.SECURITY.value,
-                ReviewDepth.DEEP.value,
-                12,
-            ],
-            [
-                "tajhatAti/routinek",
-                "main",
-                "",
-                "Frontend architecture, accessibility এবং test strategy improve করার focused patch দাও",
-                AnalysisMode.COMPREHENSIVE.value,
-                ReviewDepth.STANDARD.value,
-                9,
-            ],
+        with gr.Tab("02  Downloads"), gr.Row(equal_height=False):
+            with gr.Column(scale=5, elem_classes=["mini-panel"]):
+                archive_links = gr.Markdown(
+                    "## Download complete snapshot\n\nLoad a repository for GitHub-hosted ZIP and TAR.GZ links."
+                )
+            with gr.Column(scale=7, elem_classes=["mini-panel"]):
+                gr.Markdown(
+                    f"""## Build a selected-file ZIP
+
+Choose up to **{MAX_SELECTED_FILES} files** from the current immutable snapshot. RepoVault fetches exact Git blobs and packages them without executing content. Search in Explorer to narrow the selection list."""
+                )
+                selected_files = gr.Dropdown(
+                    label="Files to include",
+                    choices=[],
+                    multiselect=True,
+                    max_choices=MAX_SELECTED_FILES,
+                    filterable=True,
+                )
+                selected_zip_button = gr.Button("Create selected ZIP", elem_id="selected-zip")
+                selected_zip_status = gr.Markdown("Ready to create a bounded selected-file ZIP.")
+                selected_zip_download = gr.File(label="Download selected ZIP", interactive=False)
+
+        with gr.Tab("03  Commit history"):
+            gr.Markdown(
+                "### Time-travel through source\nInspect changed-file metadata, then open any listed commit as the active Explorer snapshot."
+            )
+            commit_table = gr.Dataframe(
+                headers=["Commit", "Date", "Author", "Message", "Signature"],
+                datatype=["str", "str", "str", "str", "str"],
+                value=[],
+                interactive=False,
+                wrap=True,
+            )
+            with gr.Row(equal_height=True):
+                commit_selector = gr.Dropdown(label="Choose commit", choices=[], filterable=True, scale=7)
+                commit_detail_button = gr.Button("Show changes", scale=2)
+                commit_browse_button = gr.Button("Browse this snapshot", scale=3, elem_id="browse-snapshot")
+            commit_detail = gr.Markdown(
+                "## Commit details\n\nLoad a repository, then select a commit."
+            )
+
+        with gr.Tab("04  Releases & APKs"):
+            release_view = gr.Markdown(
+                "## Releases & attached files\n\nPublished APK, AAB, ZIP, and other assets will appear here."
+            )
+
+        with gr.Tab("05  Actions artifacts"):
+            actions_view = gr.Markdown(
+                "## GitHub Actions runs\n\nLoad a repository to inspect public run metadata."
+            )
+            with gr.Row(equal_height=True):
+                run_selector = gr.Dropdown(label="Workflow run", choices=[], filterable=True, scale=9)
+                run_artifacts_button = gr.Button("List retained artifacts", scale=3)
+            artifact_view = gr.Markdown(
+                "## Run artifacts\n\nChoose a workflow run. GitHub may require sign-in for download."
+            )
+
+        with gr.Tab("06  AI review workspace"):
+            gr.Markdown(
+                """## Repository review, preserved as a specialist workspace
+The original Qwen-powered review engine remains available here. It uses bounded, sanitized evidence and never executes repository code. **This workspace reloads its own branch snapshot.**"""
+            )
+            with gr.Row(equal_height=False):
+                with gr.Column(scale=4, elem_classes=["mini-panel"]):
+                    ai_repo_input = gr.Textbox(
+                        label="Public repository",
+                        value="tajhatAti/ai",
+                        placeholder="owner/repository",
+                    )
+                    with gr.Row():
+                        ai_branch_input = gr.Textbox(label="Review branch", placeholder="default")
+                        ai_base_input = gr.Textbox(label="Compare base", placeholder="optional")
+                    ai_task_input = gr.Textbox(
+                        label="Review objective",
+                        placeholder="Review architecture, failure modes, security, and propose a minimal patch",
+                        lines=5,
+                    )
+                    ai_mode_input = gr.Dropdown(
+                        choices=[mode.value for mode in AnalysisMode],
+                        value=AnalysisMode.COMPREHENSIVE.value,
+                        label="Review mode",
+                    )
+                    ai_depth_input = gr.Radio(
+                        choices=[depth.value for depth in ReviewDepth],
+                        value=ReviewDepth.STANDARD.value,
+                        label="Depth",
+                    )
+                    ai_file_limit = gr.Slider(3, 14, value=8, step=1, label="Evidence files")
+                    ai_review_button = gr.Button("Run professional AI review", elem_id="ai-review")
+                    ai_inspect_button = gr.Button("Static inspection only — no GPU")
+                    gr.Markdown(
+                        f"**Runtime:** {MODEL_STATUS}\n\nPublic source only · secret redaction · prompt-injection neutralization",
+                        elem_classes=["safety-callout"],
+                    )
+                with gr.Column(scale=8, elem_classes=["vault-shell"]):
+                    ai_status = gr.Markdown("AI review workspace ready.")
+                    with gr.Tabs():
+                        with gr.Tab("Report"):
+                            ai_review_result = gr.Markdown(
+                                "## AI review\n\nConfigure an objective and start a review."
+                            )
+                            with gr.Accordion("Refine this report", open=False):
+                                ai_followup = gr.Textbox(label="Follow-up", lines=3)
+                                ai_refine_button = gr.Button("Refine using same snapshot")
+                        with gr.Tab("Repository"):
+                            ai_repository_overview = gr.Markdown(empty_overview)
+                        with gr.Tab("Findings"):
+                            ai_findings = gr.Markdown(empty_findings)
+                        with gr.Tab("Architecture"):
+                            ai_architecture = gr.Markdown(empty_architecture)
+                        with gr.Tab("Dependencies"):
+                            ai_dependencies = gr.Markdown(empty_dependencies)
+                        with gr.Tab("Evidence"):
+                            ai_evidence = gr.Markdown(empty_evidence)
+                        with gr.Tab("Exports"):
+                            ai_markdown_report = gr.File(label="Markdown report", interactive=False)
+                            ai_patch_report = gr.File(label="Unified diff", interactive=False)
+                            ai_json_report = gr.File(label="JSON report", interactive=False)
+
+        with gr.Tab("07  Trust & limits"):
+            gr.Markdown(
+                f"""## Safe by construction
+
+RepoVault is a **public, read-only viewer and downloader**. It accepts only canonical GitHub repository identifiers, talks only to official GitHub API hosts, and pins every view to an immutable commit SHA.
+
+### What it can do
+- Index up to 20,000 files from a public repository snapshot.
+- Preview up to 300 KB of text and prepare individual files up to 25 MB.
+- Package up to {MAX_SELECTED_FILES} selected files, with a 50 MB uncompressed ceiling.
+- Link directly to GitHub's complete source ZIP/TAR archives and public release assets.
+- List commit changes, historical snapshots, workflow runs, and retained artifact metadata.
+
+### What it will not do
+- No private repositories, visitor tokens, GitHub writes, clones, builds, shells, package installs, APK execution, workflow execution, tunnels, or arbitrary network proxying.
+- Potential credential and private-key files are not previewed or repackaged by the Space.
+- Full archives remain direct GitHub downloads. Review public repositories for accidentally committed secrets before downloading.
+
+### Actions download note
+Public artifact **metadata** can be listed anonymously. GitHub's artifact-download endpoint requires Actions-read authentication, so links open the official GitHub run/artifact page where GitHub enforces sign-in. This Space never uses an owner token to grant anonymous access.
+
+Temporary individual/selected downloads live in private `/tmp` storage, expire after two hours, and are not committed or persisted.
+"""
+            )
+
+    vault_load_button.click(
+        fn=load_vault_ui,
+        inputs=[vault_repo_input, vault_ref_input],
+        outputs=[
+            vault_state,
+            vault_dashboard,
+            file_table,
+            file_page,
+            file_browser,
+            selected_files,
+            archive_links,
+            commit_table,
+            commit_selector,
+            commit_detail,
+            release_view,
+            actions_view,
+            run_selector,
+            artifact_view,
+            file_info,
+            file_content,
+            preview_download,
+            selected_zip_download,
+            selected_zip_status,
+            vault_status,
         ],
-        inputs=[
-            repo_input,
-            branch_input,
-            comparison_base_input,
-            task_input,
-            mode_input,
-            depth_input,
-            file_limit,
-        ],
-        label="Professional review examples",
+        api_name="open_repository_vault",
     )
 
-    review_inputs = [
-        repo_input,
-        branch_input,
-        comparison_base_input,
-        task_input,
-        mode_input,
-        depth_input,
-        file_limit,
+    file_filter_button.click(
+        fn=filter_vault_files_ui,
+        inputs=[vault_state, file_query, file_page, selected_files],
+        outputs=[file_table, file_browser, selected_files, vault_status],
+        api_name="filter_snapshot_files",
+    )
+    file_preview_button.click(
+        fn=preview_file_ui,
+        inputs=[vault_state, file_browser],
+        outputs=[file_info, file_content, preview_download, vault_status],
+        api_name="preview_repository_file",
+    )
+    selected_zip_button.click(
+        fn=selected_zip_ui,
+        inputs=[vault_state, selected_files],
+        outputs=[selected_zip_download, selected_zip_status],
+        api_name="create_selected_files_zip",
+    )
+    commit_detail_button.click(
+        fn=commit_detail_ui,
+        inputs=[vault_state, commit_selector],
+        outputs=[commit_detail, vault_status],
+        api_name="inspect_commit_changes",
+    )
+    commit_browse_button.click(
+        fn=load_commit_snapshot_ui,
+        inputs=[vault_state, commit_selector],
+        outputs=[
+            vault_state,
+            vault_dashboard,
+            file_table,
+            file_page,
+            file_browser,
+            selected_files,
+            archive_links,
+            vault_ref_input,
+            file_info,
+            file_content,
+            preview_download,
+            selected_zip_download,
+            vault_status,
+        ],
+        api_name="browse_commit_snapshot",
+    )
+    run_artifacts_button.click(
+        fn=run_artifacts_ui,
+        inputs=[vault_state, run_selector],
+        outputs=[artifact_view, vault_status],
+        api_name="list_workflow_artifacts",
+    )
+
+    ai_inputs = [
+        ai_repo_input,
+        ai_branch_input,
+        ai_base_input,
+        ai_task_input,
+        ai_mode_input,
+        ai_depth_input,
+        ai_file_limit,
     ]
-    inspection_outputs = [
+    ai_inspection_outputs = [
         analysis_state,
-        repository_overview,
-        deterministic_findings,
-        architecture_map,
-        dependency_inventory,
-        evidence_files,
-        review_result,
-        markdown_report,
-        patch_report,
-        json_report,
-        operation_status,
+        ai_repository_overview,
+        ai_findings,
+        ai_architecture,
+        ai_dependencies,
+        ai_evidence,
+        ai_review_result,
+        ai_markdown_report,
+        ai_patch_report,
+        ai_json_report,
+        ai_status,
     ]
-
-    review_event = review_button.click(
+    ai_event = ai_review_button.click(
         fn=inspect_repository_ui,
-        inputs=review_inputs,
-        outputs=inspection_outputs,
-        api_name="inspect_repository",
+        inputs=ai_inputs,
+        outputs=ai_inspection_outputs,
+        api_name="inspect_repository_for_ai",
     )
-    review_event = review_event.then(
+    ai_event = ai_event.then(
         fn=generate_review,
         inputs=[analysis_state],
-        outputs=[review_result],
-        api_name="generate_review",
+        outputs=[ai_review_result],
+        api_name="generate_ai_review",
     )
-    review_event.then(
+    ai_event.then(
         fn=build_exports_ui,
-        inputs=[analysis_state, review_result],
-        outputs=[markdown_report, patch_report, json_report, operation_status],
-        api_name="export_review",
+        inputs=[analysis_state, ai_review_result],
+        outputs=[ai_markdown_report, ai_patch_report, ai_json_report, ai_status],
+        api_name="export_ai_review",
     )
-
-    inspect_button.click(
+    ai_inspect_button.click(
         fn=inspect_repository_ui,
-        inputs=review_inputs,
-        outputs=inspection_outputs,
-        api_name="inspect_only",
+        inputs=ai_inputs,
+        outputs=ai_inspection_outputs,
+        api_name="inspect_repository_static",
     ).then(
         fn=static_inspection_complete,
         inputs=None,
-        outputs=[review_result, operation_status],
+        outputs=[ai_review_result, ai_status],
         api_name=False,
     )
-
-    refine_event = refine_button.click(
+    refine_event = ai_refine_button.click(
         fn=build_refinement_ui,
-        inputs=[analysis_state, review_result, followup_input],
-        outputs=[refinement_prompt_state, operation_status],
+        inputs=[analysis_state, ai_review_result, ai_followup],
+        outputs=[refinement_prompt_state, ai_status],
         api_name=False,
     )
     refine_event = refine_event.then(
         fn=generate_refined_review,
         inputs=[refinement_prompt_state],
-        outputs=[review_result],
-        api_name="refine_review",
+        outputs=[ai_review_result],
+        api_name="refine_ai_review",
     )
     refine_event.then(
         fn=build_exports_ui,
-        inputs=[analysis_state, review_result],
-        outputs=[markdown_report, patch_report, json_report, operation_status],
+        inputs=[analysis_state, ai_review_result],
+        outputs=[ai_markdown_report, ai_patch_report, ai_json_report, ai_status],
         api_name=False,
     )
 
 
-demo.queue(default_concurrency_limit=2, max_size=32)
+demo.queue(default_concurrency_limit=4, max_size=48)
 
 if __name__ == "__main__":
-    demo.launch(show_error=False)
+    demo.launch(show_error=False, theme=theme, css=CSS)
