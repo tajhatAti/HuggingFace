@@ -13,8 +13,8 @@ Android app or minimal Space UI
     │
     └── bounded audio upload
             ├── stream-decode to bounded 16 kHz mono PCM, validate <= 8 minutes
-            ├── metadata lookup (skip GPU when trustworthy)
-            ├── multilingual Whisper on ZeroGPU
+            ├── metadata lookup (skip transcription when trustworthy)
+            ├── multilingual int8 Faster-Whisper on the 16 GB CPU
             ├── up to two recognized-phrase LRCLIB searches
             ├── strict word/script/duration validation
             └── provider LRC or AI-timed LRC + JSON + download
@@ -22,17 +22,17 @@ Android app or minimal Space UI
 
 ## Components
 
-- `app.py` — model lifecycle, ZeroGPU boundary, minimal Gradio interface and public API callbacks.
+- `app.py` — quota-free CPU model lifecycle, minimal Gradio interface and public API callbacks.
 - `lyr_service/audio.py` — bounded decode, float conversion and 16 kHz mono resampling.
 - `lyr_service/provider.py` — fixed-host LRCLIB requests, candidate mapping and conservative scoring.
-- `lyr_service/recognizer.py` — Transformers Whisper output mapping.
+- `lyr_service/recognizer.py` — Faster-Whisper and test-adapter output mapping.
 - `lyr_service/lyrics.py` — Unicode cleanup, phrase splitting, explicit-end LRC serialization/parsing.
 - `lyr_service/service.py` — retrieval-first orchestration.
 - `lyr_service/domain.py` — immutable API records.
 
-## Why Whisper large-v3-turbo
+## Why quota-free Faster-Whisper small
 
-`openai/whisper-large-v3-turbo` is multilingual and keeps most large-v3 quality while using a faster decoder, which is a better fit for Bengali and sung audio than the small checkpoint. Its bfloat16 weights fit within the available 16 GB host RAM and ZeroGPU runtime. The model can be changed with `WHISPER_MODEL_ID`, but replacements must be measured before changing the 90-second declaration.
+`Systran/faster-whisper-small` runs through CTranslate2 int8 on the Space's free CPU. It trades some accuracy and speed for predictable personal availability: no daily ZeroGPU allowance can block the website or Android app. All available CPU threads are used, one transcription runs at a time, Bengali remains supported, and retrieval-first matching still avoids inference whenever trustworthy synchronized lyrics exist.
 
 ## Lyr compatibility
 
@@ -41,6 +41,6 @@ The reviewed Android branch represents an explicit cue end as an empty timestamp
 ## Failure behavior
 
 - LRCLIB outage: audio transcription can still produce an AI LRC.
-- ZeroGPU/model outage: strict title lookup remains available.
+- CPU model outage: strict title lookup remains available.
 - Invalid/oversized/long audio: rejected before inference.
 - Weak audio-to-provider evidence: provider result is rejected and the AI transcript is returned with an accuracy warning.

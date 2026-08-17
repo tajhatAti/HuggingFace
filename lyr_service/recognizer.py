@@ -78,3 +78,52 @@ class WhisperRecognizer:
             )
         detected = language or "auto"
         return transcript, tuple(segments), detected
+
+
+class CpuWhisperRecognizer:
+    """CTranslate2 int8 Whisper adapter for reliable quota-free CPU inference."""
+
+    def __init__(self, model: Any) -> None:
+        self.model = model
+
+    def transcribe(
+        self,
+        samples: np.ndarray,
+        sample_rate: int,
+        duration_seconds: float,
+        language_label: str,
+    ) -> tuple[str, tuple[TimedSegment, ...], str]:
+        if sample_rate != 16_000:
+            raise RecognitionError("CPU Whisper requires 16 kHz audio.")
+        language = LANGUAGE_CODES.get(language_label)
+        try:
+            generated, info = self.model.transcribe(
+                samples,
+                language=language,
+                task="transcribe",
+                beam_size=3,
+                best_of=3,
+                condition_on_previous_text=False,
+                vad_filter=False,
+                word_timestamps=False,
+            )
+            segments: list[TimedSegment] = []
+            text_parts: list[str] = []
+            for item in generated:
+                start = max(0.0, float(item.start))
+                end = min(duration_seconds, max(start + 0.1, float(item.end)))
+                text = normalize_text(str(item.text or ""))
+                if text and end > start:
+                    segments.append(TimedSegment(start, end, text))
+                    text_parts.append(text)
+        except Exception as exc:
+            raise RecognitionError(
+                f"CPU Whisper could not process this audio: {type(exc).__name__}"
+            ) from exc
+        transcript = normalize_text(" ".join(text_parts))
+        if not transcript or not segments:
+            raise RecognitionError(
+                "No usable sung words were recognized in this recording."
+            )
+        detected = language or normalize_text(str(getattr(info, "language", "auto")))
+        return transcript, tuple(segments), detected or "auto"

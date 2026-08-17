@@ -1,4 +1,4 @@
-"""Request free ZeroGPU after GitHub Actions syncs the Gradio Space."""
+"""Keep the mirrored Space on free 16 GB CPU hardware and run its smoke test."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ if not TOKEN:
 
 api = HfApi(token=TOKEN)
 try:
-    runtime = api.request_space_hardware(repo_id=SPACE_ID, hardware="zero-a10g")
+    runtime = api.request_space_hardware(repo_id=SPACE_ID, hardware="cpu-basic")
 except Exception as exc:
     print(
-        f"Unable to request ZeroGPU for {SPACE_ID}: {type(exc).__name__}: {exc}",
+        f"Unable to request free CPU for {SPACE_ID}: {type(exc).__name__}: {exc}",
         file=sys.stderr,
     )
     raise

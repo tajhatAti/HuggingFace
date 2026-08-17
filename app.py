@@ -11,14 +11,12 @@ import uuid
 from pathlib import Path
 
 import gradio as gr
-import spaces
-import torch
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from faster_whisper import WhisperModel
 
 from lyr_service.audio import MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS, load_audio
 from lyr_service.domain import LyricsDocument
 from lyr_service.provider import LrcLibClient
-from lyr_service.recognizer import LANGUAGE_CODES, WhisperRecognizer
+from lyr_service.recognizer import CpuWhisperRecognizer, LANGUAGE_CODES
 from lyr_service.service import LyricsService, LyricsServiceError
 
 logging.basicConfig(
@@ -26,62 +24,31 @@ logging.basicConfig(
 )
 log = logging.getLogger("lyr-online")
 
-MODEL_ID = os.getenv("WHISPER_MODEL_ID", "openai/whisper-large-v3-turbo")
-DEVICE = torch.device("cuda")
-MODEL = None
-PROCESSOR = None
-ASR_PIPELINE = None
+MODEL_ID = os.getenv("WHISPER_CPU_MODEL_ID", "Systran/faster-whisper-small")
+CPU_THREADS = max(1, min(8, os.cpu_count() or 2))
+CPU_MODEL = None
+CPU_RECOGNIZER = None
 MODEL_ERROR = ""
-ZERO_GPU_ERROR = ""
 OUTPUT_ROOT = Path(os.getenv("LYR_OUTPUT_DIRECTORY", "/tmp/lyr-online"))
 OUTPUT_TTL_SECONDS = 2 * 60 * 60
 MAX_OUTPUT_FILES = 80
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 try:
-    log.info("Loading %s for ZeroGPU", MODEL_ID)
-    PROCESSOR = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=False)
-    MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
+    log.info("Loading quota-free CPU Whisper %s with %s threads", MODEL_ID, CPU_THREADS)
+    CPU_MODEL = WhisperModel(
         MODEL_ID,
-        dtype=torch.bfloat16,
-        low_cpu_mem_usage=True,
-        use_safetensors=True,
-        trust_remote_code=False,
-    ).to(DEVICE)
-    MODEL.eval()
-    ASR_PIPELINE = pipeline(
-        "automatic-speech-recognition",
-        model=MODEL,
-        tokenizer=PROCESSOR.tokenizer,
-        feature_extractor=PROCESSOR.feature_extractor,
-        dtype=torch.bfloat16,
-        device=DEVICE,
-        chunk_length_s=25,
-        stride_length_s=(4, 2),
+        device="cpu",
+        compute_type="int8",
+        cpu_threads=CPU_THREADS,
+        num_workers=1,
     )
-    log.info("Whisper is ready")
-except Exception as exc:  # noqa: BLE001 - model stacks raise heterogeneous startup errors.
+    CPU_RECOGNIZER = CpuWhisperRecognizer(CPU_MODEL)
+    log.info("CPU Whisper is ready")
+except Exception as exc:  # noqa: BLE001 - model runtimes raise heterogeneous errors.
     MODEL_ERROR = f"{type(exc).__name__}: {exc}"
-    log.error("Whisper loading failed: %s", MODEL_ERROR)
+    log.error("CPU Whisper loading failed: %s", MODEL_ERROR)
     log.debug(traceback.format_exc())
-
-
-def _zero_gpu_or_fallback(*, duration: int):
-    """Keep instant online lookup available during a ZeroGPU control-plane outage."""
-
-    def decorate(function):
-        global ZERO_GPU_ERROR
-        if ZERO_GPU_ERROR:
-            return function
-        try:
-            return spaces.GPU(duration=duration)(function)
-        except Exception as exc:  # noqa: BLE001 - control-plane failures vary by runtime.
-            ZERO_GPU_ERROR = f"{type(exc).__name__}: {exc}"
-            log.error("ZeroGPU registration failed: %s", ZERO_GPU_ERROR)
-            log.debug(traceback.format_exc())
-            return function
-
-    return decorate
 
 
 def _cleanup_outputs() -> None:
@@ -159,7 +126,7 @@ def _error_outputs(message: str):
 
 
 def lookup_lyrics_ui(title: str, artist: str, duration_seconds: float):
-    """Find a strict synchronized match without spending GPU quota."""
+    """Find a strict synchronized match without starting transcription."""
 
     try:
         document = LyricsService(provider=LrcLibClient()).lookup(
@@ -175,20 +142,13 @@ def lookup_lyrics_ui(title: str, artist: str, duration_seconds: float):
         return _error_outputs("Unexpected online lookup error. Try again shortly.")
 
 
-@_zero_gpu_or_fallback(duration=90)
 def transcribe_song_ui(audio_path: str, title: str, artist: str, language_label: str):
-    """Decode one bounded song, prefer exact retrieval, then transcribe on ZeroGPU."""
+    """Prefer exact retrieval, then transcribe on quota-free CPU Whisper."""
 
     try:
         audio = load_audio(audio_path)
-        if ZERO_GPU_ERROR:
-            recognizer = None
-        else:
-            recognizer = (
-                WhisperRecognizer(ASR_PIPELINE) if ASR_PIPELINE is not None else None
-            )
         document = LyricsService(
-            provider=LrcLibClient(), recognizer=recognizer
+            provider=LrcLibClient(), recognizer=CPU_RECOGNIZER
         ).transcribe(
             audio,
             title=title or "",
@@ -204,9 +164,9 @@ def transcribe_song_ui(audio_path: str, title: str, artist: str, language_label:
 
 
 MODEL_STATUS = (
-    f"Whisper ready · `{MODEL_ID}`"
-    if ASR_PIPELINE is not None and not ZERO_GPU_ERROR
-    else "AI listening is temporarily unavailable; instant synchronized lookup remains online."
+    f"Quota-free CPU Whisper ready · `{MODEL_ID}` · {CPU_THREADS} threads"
+    if CPU_RECOGNIZER is not None
+    else "CPU AI is temporarily unavailable; synchronized title lookup remains online."
 )
 
 CSS = """

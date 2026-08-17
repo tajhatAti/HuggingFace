@@ -74,7 +74,7 @@ data class OnDeviceModelStatus(
  * the player, synchronized editor, floating overlay, and foreground progress notification.
  *
  * Audio is uploaded only to the owner's fixed Hugging Face Space. The server searches LRCLIB first
- * and reserves ZeroGPU transcription only when trustworthy synchronized lyrics are unavailable.
+ * and uses quota-free CPU transcription only when synchronized lyrics are unavailable.
  */
 object OnDeviceAiLyricsManager {
 
@@ -130,7 +130,7 @@ object OnDeviceAiLyricsManager {
             ?.any { it.isFile }
             ?: false
         return OnDeviceModelStatus(
-            displayName = "Lyr Online · Whisper large-v3-turbo",
+            displayName = "Lyr Online · quota-free CPU Whisper",
             downloadBytes = 0L,
             downloaded = false,
             obsoleteModelDownloaded = oldModels,

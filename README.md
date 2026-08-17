@@ -9,7 +9,7 @@ python_version: 3.12.12
 pinned: false
 license: apache-2.0
 models:
-  - openai/whisper-large-v3-turbo
+  - Systran/faster-whisper-small
 ---
 
 # Lyr Online
@@ -20,7 +20,7 @@ The former GitHub repository explorer has been removed. This Space now does one 
 
 1. accept one song;
 2. prefer a strict synchronized LRCLIB result when title/artist metadata identifies it safely;
-3. otherwise listen with multilingual Whisper on Hugging Face ZeroGPU;
+3. otherwise listen with multilingual int8 Faster-Whisper on the 16 GB CPU;
 4. use recognized lyric evidence for one final strict synchronized lookup;
 5. fall back to an editable AI-generated LRC with explicit cue endings;
 6. return plain lyrics, synchronized LRC, structured app data, and a downloadable `.lrc` file.
@@ -36,7 +36,7 @@ The online architecture intentionally preserves the stronger branch's retrieval-
 
 ## User flow
 
-- **Known title:** enter title/artist and use **Find by name only**. This is fast and uses no GPU quota.
+- **Known title:** enter title/artist and use **Find by name only**. This is fast and uses no transcription compute.
 - **Unknown or unreliable metadata:** upload MP3/M4A/WAV/FLAC/OGG/AAC and use **Extract synced lyrics**.
 - **বাংলা:** choose বাংলা to force Bengali transcription without translation.
 - Download the `.lrc`, copy plain lyrics, or consume the structured API result.
@@ -67,12 +67,12 @@ The Android client should call lookup first and upload audio only when lookup ha
 |---|---:|
 | Audio size | 16 GB |
 | Audio duration | 8 minutes |
-| GPU queue concurrency | 1 |
+| CPU inference concurrency | 1 |
 | Queue size | 8 |
 | LRCLIB results per request | 20 |
 | Recognized-text follow-up queries | 2 |
 | LRC output retention | 2 hours / 80 files |
-| ZeroGPU reservation | 90 seconds |
+| GPU quota required | No |
 
 Audio is decoded ephemerally through bounded 16 kHz mono FFmpeg output and is not published. Large source files stay on ephemeral disk instead of expanding at their original sample rate in RAM. Generated LRC files receive randomized names and expire. Singing transcription is inherently less reliable than speech recognition; accompaniment, reverb, language, and vocal clarity affect accuracy.
 
@@ -88,7 +88,7 @@ python -m compileall -q app.py lyr_service scripts tests
 
 ## Deployment
 
-Every push to `arena/01a00b5b-huggingface` is validated and mirrored to `madarauchihagmailcom/My` by `.github/workflows/sync-to-huggingface.yml`. The workflow requests ZeroGPU after syncing.
+Every push to `arena/01a00b5b-huggingface` is validated and mirrored to `madarauchihagmailcom/My` by `.github/workflows/sync-to-huggingface.yml`. The workflow keeps the Space on free 16 GB CPU hardware and runs a real audio-to-LRC smoke test after syncing.
 
 ## Security
 

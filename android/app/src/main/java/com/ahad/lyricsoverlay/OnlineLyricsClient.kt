@@ -54,7 +54,7 @@ class OnlineLyricsClient(
         onProgress(18, "No trustworthy match found; uploading the song securely…")
         val uploadedPath = uploadAudio(audioUri, displayName, onProgress)
         ensureActive()
-        onProgress(62, "Whisper is listening on Hugging Face ZeroGPU…")
+        onProgress(62, "Quota-free CPU Whisper is listening on Hugging Face…")
         val eventId = createPrediction(uploadedPath, title, artist, forceBengali)
         ensureActive()
         onProgress(78, "Building synchronized lyric timing…")
@@ -300,7 +300,7 @@ class OnlineLyricsClient(
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val UPLOAD_TIMEOUT_MS = 180_000
         private const val REQUEST_TIMEOUT_MS = 30_000
-        private const val INFERENCE_TIMEOUT_MS = 240_000
+        private const val INFERENCE_TIMEOUT_MS = 15 * 60_000
         private const val BUFFER_BYTES = 64 * 1_024
         private val EVENT_ID = Regex("[A-Za-z0-9_-]{8,200}")
     }

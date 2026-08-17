@@ -2,7 +2,7 @@
 
 ## Deploy
 
-Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, syncs the Space, then requests ZeroGPU.
+Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, syncs the Space, selects free 16 GB CPU hardware, then uploads a public-domain WAV and requires successful synchronized LRC output.
 
 ## Verify
 
@@ -16,8 +16,7 @@ Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, 
 
 ## Troubleshooting
 
-- **Model unavailable:** instant title lookup should still work; inspect model ID, dtype and ZeroGPU logs.
-- **ZeroGPU startup-report timeout:** rebuild once; the guarded registration keeps the CPU lookup surface available when possible.
+- **Model unavailable:** instant title lookup should still work; inspect the Faster-Whisper model download and CPU runtime logs.
 - **LRCLIB error:** retry later; AI transcription can still finish if the model is available.
 - **Audio decode error:** confirm the file is a valid MP3/M4A/WAV/FLAC/OGG/AAC and not DRM-protected.
 - **Weak singing output:** provide title/artist, force the correct language, or correct the returned editable LRC in the Android app.

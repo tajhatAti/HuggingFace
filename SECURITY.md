@@ -11,7 +11,7 @@ Lyr Online processes user-selected audio into lyrics. It does not execute upload
 - LRCLIB is the only application-controlled external API host.
 - HTTP redirects from the provider are rejected.
 - Provider lists and lyric text lengths are bounded.
-- ZeroGPU transcription has concurrency, queue, and duration ceilings.
+- Quota-free CPU transcription has concurrency, queue, upload, decode-time, and song-duration ceilings.
 - Generated LRC files use randomized names, private file permissions, and two-hour cleanup.
 - Errors do not echo audio, model prompts, tokens, or server paths.
 - No secret is embedded in the Android integration contract.

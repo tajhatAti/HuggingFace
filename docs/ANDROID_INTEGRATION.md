@@ -30,9 +30,9 @@ The legacy manager class name and some result enum names are intentionally retai
 - Internet is required.
 - When metadata does not produce a trustworthy match, the song is uploaded ephemerally to the owner's Hugging Face Space.
 - No model is stored on the phone.
-- Upload size is capped at 16 GB; song duration remains capped at eight minutes for the bounded ZeroGPU transcription window.
+- Upload size is capped at 16 GB; song duration remains capped at eight minutes for bounded song processing.
 - The client uses HTTPS only, bounded timeouts, one job at a time, cancellation, and limited retries while a sleeping Space wakes.
-- The backend searches LRCLIB before reserving ZeroGPU transcription.
+- The backend searches LRCLIB before starting quota-free CPU transcription.
 
 ## Build and APK
 
