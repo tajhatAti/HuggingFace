@@ -168,12 +168,32 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
             "Auto detection did not return native Bengali-script synchronized lyrics: "
             f"{json.dumps(diagnostics, ensure_ascii=False)}"
         )
+    bengali_characters = sum(
+        "\u0980" <= character <= "\u09ff" for character in lrc
+    )
+    replacement_characters = lrc.count("\ufffd")
+    line_count = len(structured.get("lines") or [])
+    if (
+        bengali_characters < 40
+        or line_count < 5
+        or replacement_characters > max(2, bengali_characters // 20)
+    ):
+        raise SmokeTestError(
+            "Bengali transcription did not contain enough usable native-script lyrics: "
+            f"Bengali characters={bengali_characters}, lines={line_count}, "
+            f"replacement characters={replacement_characters}."
+        )
     result = {
         "revision": revision,
         "source": structured.get("source"),
         "language": structured.get("language"),
-        "lines": len(structured.get("lines") or []),
+        "title": structured.get("title"),
+        "artist": structured.get("artist"),
+        "lines": line_count,
+        "bengali_characters": bengali_characters,
         "audio_bytes": len(audio_response.content),
+        "warnings": structured.get("warnings"),
+        "lrc_excerpt": lrc[:360],
     }
     print(f"Deployed upload/transcription smoke passed: {json.dumps(result)}")
     return result

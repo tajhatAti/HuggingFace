@@ -30,7 +30,14 @@ print(
     f"hardware={runtime.hardware}, requested={runtime.requested_hardware}"
 )
 try:
-    run_deployed_smoke_test(api)
+    smoke_result = run_deployed_smoke_test(api)
+    notice = (
+        str(smoke_result)
+        .replace("%", "%25")
+        .replace("\r", "%0D")
+        .replace("\n", "%0A")
+    )
+    print(f"::notice title=Deployed Bengali audio smoke passed::{notice}")
 except Exception as exc:
     message = (
         str(exc)
