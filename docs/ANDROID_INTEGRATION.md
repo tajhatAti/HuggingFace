@@ -1,32 +1,61 @@
-# Android integration contract
+# Android client and online integration
 
-Target source: `tajhatAti/Lyr`, branch `arena/019ffc7c-lyr`.
+The complete Android project now lives in this repository at [`android/`](../android). It was based on the functional `tajhatAti/Lyr` branch `arena/019ffc7c-lyr`, then converted from local Whisper to the live Lyr Online backend.
 
-## Intended behavior
+## Preserved native features
 
-1. Keep playback, MediaStore, overlay, settings, queue, LRC parser, corrections and caching native.
-2. Keep the existing strict metadata lookup.
-3. Remove the local Whisper dependency, model downloader, local WAV chunk inference and offline-AI claims.
-4. When metadata lookup fails, upload the selected audio to Lyr Online.
-5. Parse the structured result, save `synced_lyrics` through the existing private cache, and refresh Live Lyrics/overlay.
-6. Show a clear network-required message when offline; do not silently fall back to a local model.
+Playback, MediaStore scanning, queue management, synchronized/live lyrics, floating overlay, LRC parsing and editing, timing corrections, Bengali script checks, same-folder LRC support, and saved lyric caches remain native Android features. Only song extraction/transcription moved online.
 
-## Space endpoints
+## Online-only pipeline
 
-The public Gradio schema is available from:
+`OnlineLyricsClient.kt` uses the public Gradio queued API at the fixed HTTPS Space:
 
 ```text
-GET https://madarauchihagmailcom-my.hf.space/gradio_api/info
+https://madarauchihagmailcom-my.hf.space
 ```
 
-Named endpoints:
+For each Smart Lyrics request it:
+
+1. calls `/lookup_lyrics` with title, artist, and duration;
+2. immediately returns a strict synchronized LRCLIB match when available;
+3. otherwise uploads the selected audio through `/gradio_api/upload`;
+4. calls `/transcribe_song` and waits for its server-sent completion event;
+5. validates that the structured result is successful and contains parseable LRC;
+6. returns it through the existing `OnDeviceAiLyricsManager` listener/state contract, allowing the player and editor to adopt the result without architectural regressions.
+
+The legacy manager class name and some result enum names are intentionally retained for source compatibility. The implementation does not decode audio, download model weights, load native Whisper, or run local AI. Known pasted lyrics can still be aligned to server-provided timing using a small deterministic Kotlin text/timing algorithm.
+
+## Privacy and bounds
+
+- Internet is required.
+- When metadata does not produce a trustworthy match, the song is uploaded ephemerally to the owner's Hugging Face Space.
+- No model is stored on the phone.
+- Audio is limited to 80 MB and eight minutes.
+- The client uses HTTPS only, bounded timeouts, one job at a time, cancellation, and limited retries while a sleeping Space wakes.
+- The backend searches LRCLIB before reserving ZeroGPU transcription.
+
+## Build and APK
+
+From the repository root:
+
+```bash
+cd android
+./gradlew clean testDebugUnitTest assembleDebug
+```
+
+Output:
 
 ```text
-/lookup_lyrics
-/transcribe_song
+android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The recommended Android implementation follows Gradio's upload + queued-call protocol rather than inventing an unrestricted custom proxy. The response's structured JSON object contains:
+A push that changes `android/**` triggers `.github/workflows/build-android-apk.yml`. It runs the same tests/build, uploads the `lyr-online-debug-apk` Actions artifact for 30 days, and attaches `app-debug.apk` to a GitHub prerelease tagged `lyr-online-<run number>`.
+
+To install manually, download the APK on the Android phone, allow installation from that browser or file manager when Android asks, then open the APK. Android 7.0 (API 24) or newer is supported. Existing installs made from a differently signed build may need to be uninstalled first.
+
+## Backend response
+
+The structured output consumed by Android includes:
 
 ```json
 {
@@ -45,17 +74,8 @@ The recommended Android implementation follows Gradio's upload + queued-call pro
 }
 ```
 
-## Required Android source changes
+The authoritative live schema remains available at:
 
-- Add `OnlineLyricsService.kt` for HTTPS upload/call/status handling.
-- Change `OnDeviceAiLyricsManager` into an online job coordinator or replace it with `OnlineAiLyricsManager` while retaining its observable job-state contract.
-- Remove `dev.ffmpegkit-maintained:whisper-android` and the `arm64-v8a` restriction if no other native library needs it.
-- Remove model download/delete controls and text.
-- Keep the eight-minute policy, foreground data-sync notification, cancellation, durable result adoption, and regression tests.
-- Update README privacy language: the song is uploaded ephemerally to the public owner's Hugging Face Space.
-
-## Build
-
-The existing `.github/workflows/build-apk.yml` on the Lyr branch already builds, tests, uploads `lyrics-overlay-debug-apk`, and attaches `app-debug.apk` to a prerelease. After Android integration is committed to that branch, the user can obtain the real APK from the successful Actions run.
-
-This checkout is locked to the Hugging Face repository branch, so Android source cannot be pushed to the separate Lyr repository from this session. Open a new Arena Agent Mode session on `tajhatAti/Lyr` to apply and test the client changes without manually editing files.
+```text
+GET https://madarauchihagmailcom-my.hf.space/gradio_api/info
+```

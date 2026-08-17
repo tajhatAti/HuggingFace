@@ -43,6 +43,17 @@ The online architecture intentionally preserves the stronger branch's retrieval-
 
 This is deliberately online-only. There is no local model download and no offline AI fallback.
 
+## Android app and APK
+
+The complete native app is in [`android/`](android). It keeps Lyr's music player, synchronized and floating lyrics, Bengali handling, LRC timing/editor, local saved lyrics, and automatic lyrics flow. Smart Lyrics now performs strict online lookup first and securely uploads audio to this Space only when transcription is needed.
+
+Every push changing `android/**` runs `.github/workflows/build-android-apk.yml`. A successful run provides:
+
+- the `lyr-online-debug-apk` Actions artifact; and
+- `app-debug.apk` attached to a GitHub prerelease tagged `lyr-online-<run number>`.
+
+See [`docs/ANDROID_INTEGRATION.md`](docs/ANDROID_INTEGRATION.md) for architecture, privacy behavior, local build instructions, and installation guidance.
+
 ## Public Gradio API
 
 - `/lookup_lyrics(title, artist, duration_seconds)`

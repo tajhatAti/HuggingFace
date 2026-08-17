@@ -15,3 +15,12 @@ venv/
 *.p12
 *.pfx
 .DS_Store
+
+# Android / Gradle local output
+android/.gradle/
+android/.idea/
+android/local.properties
+android/**/build/
+android/captures/
+*.apk
+*.aab

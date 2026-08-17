@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/miniPlayer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom"
+    android:layout_marginStart="12dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="12dp"
+    android:visibility="gone"
+    app:cardBackgroundColor="@color/surface_elevated"
+    app:cardCornerRadius="22dp"
+    app:cardElevation="12dp"
+    app:strokeColor="#554B5366"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/miniAlbumArt"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="@drawable/bg_artwork"
+                android:clipToOutline="true"
+                android:contentDescription="@null"
+                android:padding="10dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_album" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/miniSongTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/nothing_playing"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/miniSongArtist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/miniLyricsStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/lyrics_searching"
+                    android:textColor="@color/primary"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/previousButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/previous"
+                android:padding="8dp"
+                android:src="@drawable/ic_previous" />
+
+            <ImageButton
+                android:id="@+id/playPauseButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_play_button"
+                android:contentDescription="@string/play"
+                android:padding="10dp"
+                android:src="@drawable/ic_play" />
+
+            <ImageButton
+                android:id="@+id/nextButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/next"
+                android:padding="8dp"
+                android:src="@drawable/ic_next" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/playerSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:layout_marginTop="3dp"
+            android:max="1000"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:progressTint="@color/primary"
+            android:thumbTint="@color/primary_light" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

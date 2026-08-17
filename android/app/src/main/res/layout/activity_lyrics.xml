@@ -1,0 +1,809 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/lyricsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <ImageButton
+            android:id="@+id/lyricsBackButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:padding="12dp"
+            android:src="@drawable/ic_arrow_back" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/lyrics_center"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/lyricsSongSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/nothing_playing"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/lyricsTimerButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/sleep_timer"
+            android:padding="12dp"
+            android:src="@drawable/ic_timer" />
+    </LinearLayout>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/lyricsTabs"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:background="@color/background"
+        app:tabIndicatorFullWidth="false"
+        app:tabMode="fixed"
+        app:tabRippleColor="@color/surface_soft"
+        app:tabSelectedTextColor="@color/primary"
+        app:tabTextColor="@color/text_secondary" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <FrameLayout
+            android:id="@+id/liveLyricsSection"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/liveLyricsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:paddingStart="18dp"
+                android:paddingTop="150dp"
+                android:paddingEnd="18dp"
+                android:paddingBottom="180dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/lyricsSourceBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_queue_number"
+                    android:ellipsize="end"
+                    android:maxWidth="170dp"
+                    android:maxLines="1"
+                    android:paddingStart="12dp"
+                    android:paddingTop="7dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="7dp"
+                    android:text="@string/lyrics_loading"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/fixLyricsTimingButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="0dp"
+                    android:text="@string/fix_lyrics_timing"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_timer"
+                    app:iconPadding="4dp"
+                    app:iconSize="16dp" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/overlayStatusButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="14dp"
+                android:text="@string/enable_floating_overlay"
+                android:textSize="12sp"
+                app:icon="@drawable/ic_lyrics" />
+
+            <LinearLayout
+                android:id="@+id/liveLyricsEmptyState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="30dp">
+
+                <ImageView
+                    android:layout_width="62dp"
+                    android:layout_height="62dp"
+                    android:contentDescription="@null"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_lyrics" />
+
+                <TextView
+                    android:id="@+id/liveLyricsEmptyTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center"
+                    android:text="@string/lyrics_loading"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/liveLyricsEmptyMessage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="@string/lyrics_how_it_works"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/createAiLyricsButton"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="@string/smart_lyrics_action"
+                    app:icon="@drawable/ic_auto_lyrics" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/findOnlineLyricsButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="4dp"
+                        android:layout_weight="1"
+                        android:text="@string/find_online_lyrics"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_search" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/openLyricsEditorButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_weight="1"
+                        android:text="@string/import_or_edit_lrc"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_edit" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/retryAutomaticLyricsButton"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/retry_automatic_lookup"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_restore" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/onlineLyricsSection"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/online_search_explanation"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/lyricsSearchInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:hint="@string/search_title_artist_album"
+                app:startIconDrawable="@drawable/ic_search">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/lyricsSearchInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/searchLyricsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/search_lrclib"
+                app:icon="@drawable/ic_search" />
+
+            <TextView
+                android:id="@+id/onlineLyricsStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingTop="10dp"
+                android:paddingBottom="6dp"
+                android:text="@string/search_select_download_hint"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/onlineLyricsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="18dp" />
+        </LinearLayout>
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/aiLyricsSection"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="14dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="28dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:drawableStart="@drawable/ic_auto_lyrics"
+                    android:drawablePadding="9dp"
+                    android:gravity="center_vertical"
+                    android:text="@string/ai_sync_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/ai_smart_privacy_short"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/aiModelStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/ai_model_checking"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/deleteAiModelButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/ai_delete_model"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_restore" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/aiModeToggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    app:checkedButton="@id/aiAudioOnlyModeButton"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiAudioOnlyModeButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/ai_mode_audio_only" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiKnownLyricsModeButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/ai_mode_known_lyrics" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/aiKnownLyricsInputLayout"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="@string/ai_known_lyrics_hint"
+                    android:visibility="gone">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/aiKnownLyricsInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="180dp"
+                        android:gravity="top|start"
+                        android:inputType="textMultiLine|textCapSentences"
+                        android:paddingTop="12dp"
+                        android:scrollbars="vertical" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/aiBengaliCheckBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:checked="false"
+                    android:text="@string/ai_prioritize_bengali"
+                    android:textColor="@color/text_primary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/startAiLyricsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/ai_start"
+                    app:icon="@drawable/ic_auto_lyrics" />
+
+                <LinearLayout
+                    android:id="@+id/aiProcessSteps"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="32dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/aiStepOnlineIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_step_waiting" />
+
+                        <TextView
+                            android:id="@+id/aiStepOnlineText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:text="@string/ai_step_online"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="32dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/aiStepPrepareIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_step_waiting" />
+
+                        <TextView
+                            android:id="@+id/aiStepPrepareText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:text="@string/ai_step_prepare"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="32dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/aiStepListenIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_step_waiting" />
+
+                        <TextView
+                            android:id="@+id/aiStepListenText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:text="@string/ai_step_listen"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="32dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/aiStepRetryIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_step_waiting" />
+
+                        <TextView
+                            android:id="@+id/aiStepRetryText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:text="@string/ai_step_retry"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="32dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/aiStepFinishIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_step_waiting" />
+
+                        <TextView
+                            android:id="@+id/aiStepFinishText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:text="@string/ai_step_finish"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/aiLyricsProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:visibility="gone"
+                    app:trackThickness="6dp" />
+
+                <TextView
+                    android:id="@+id/aiLyricsStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="@string/ai_idle_status"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/cancelAiLyricsButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/ai_cancel"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_stop" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/reviewAiLyricsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/ai_review_and_edit"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_edit" />
+
+                <TextView
+                    android:id="@+id/aiPreviewTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="@string/ai_result_preview"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/aiLyricsPreviewRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="320dp"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_permission_banner"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never"
+                    android:padding="8dp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/editLyricsSection"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="14dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="28dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/lrc_editor_explanation"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/lrc_example"
+                    android:textColor="@color/text_muted"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp"
+                    android:typeface="monospace" />
+
+                <EditText
+                    android:id="@+id/lrcEditor"
+                    android:layout_width="match_parent"
+                    android:layout_height="320dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_permission_banner"
+                    android:gravity="top|start"
+                    android:hint="@string/paste_lrc_here"
+                    android:inputType="textMultiLine|textNoSuggestions"
+                    android:padding="14dp"
+                    android:scrollbars="vertical"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_muted"
+                    android:textSize="14sp"
+                    android:typeface="monospace" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/importLrcButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="5dp"
+                        android:layout_weight="1"
+                        android:text="@string/import_lrc"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_download" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/insertTimestampButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:text="@string/add_current_time"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_timer" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/saveLyricsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/save_and_use_lyrics"
+                    app:icon="@drawable/ic_edit" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/restoreAutomaticLyricsButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/restore_automatic_lyrics"
+                    app:icon="@drawable/ic_restore" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="22dp"
+                    android:text="@string/community_publish_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/community_publish_explanation"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/publishLyricsButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/publish_to_lrclib"
+                    app:icon="@drawable/ic_upload" />
+
+                <TextView
+                    android:id="@+id/publishLyricsStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:background="@color/surface"
+        android:elevation="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/lyricsElapsedTime"
+            android:layout_width="52dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="0:00"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/lyricsPreviousButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/previous"
+            android:padding="12dp"
+            android:src="@drawable/ic_previous" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/lyricsPlayPauseCard"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="6dp">
+
+            <ImageButton
+                android:id="@+id/lyricsPlayPauseButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/play"
+                android:padding="16dp"
+                android:src="@drawable/ic_play" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <ImageButton
+            android:id="@+id/lyricsNextButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/next"
+            android:padding="12dp"
+            android:src="@drawable/ic_next" />
+
+        <SeekBar
+            android:id="@+id/lyricsSeekBar"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:max="1000"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:progressTint="@color/primary"
+            android:thumbTint="@color/primary" />
+    </LinearLayout>
+</LinearLayout>
