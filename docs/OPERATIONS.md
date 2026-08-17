@@ -1,133 +1,27 @@
-# Operations runbook
+# Operations
 
-## Deployment path
+## Deploy
 
-A push to `main` or `arena/01a00b5b-huggingface` triggers `.github/workflows/sync-to-huggingface.yml`.
+Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, syncs the Space, then requests ZeroGPU.
 
-The workflow:
+## Verify
 
-1. checks out the exact GitHub commit;
-2. installs only Requests for core tests;
-3. runs the unit suite and bytecode compilation;
-4. installs the current Hugging Face CLI;
-5. mirrors repository files to `madarauchihagmailcom/My` as a Gradio Space;
-6. requests `zero-a10g` through `scripts/configure_space.py`.
+1. Confirm the workflow succeeds.
+2. Confirm the Space runtime is `RUNNING` and the runtime SHA matches the newest Hub revision.
+3. Load the page and verify the title is `Lyr Online`.
+4. Call `/lookup_lyrics` with a known song and verify a strict synchronized result or a clear no-match response.
+5. Upload a short public-domain speech/audio fixture and verify `whisper_ai` structured output and a valid `.lrc` download.
+6. Verify 80 MB and eight-minute rejections.
+7. Verify no former RepoVault/GitHub explorer endpoint remains in `/gradio_api/info`.
 
-Authentication is the repository Actions secret `HF_TOKEN`, restricted to this one Space. Never copy the token into a log, issue, commit, Space variable, or support conversation.
+## Troubleshooting
 
-## Post-deployment verification
-
-Verify in this order:
-
-1. GitHub Action conclusion is green.
-2. `Validate source and safety tests` passed.
-3. `Mirror files to Hugging Face` passed.
-4. `Request free ZeroGPU hardware` passed.
-5. Space metadata reports SDK `gradio` and requested/current hardware `zero-a10g`.
-6. Runtime stage reaches `RUNNING`.
-7. Space homepage renders the animated RepoVault 3D artwork and glass serial onboarding.
-8. Connect a small public repository; verify all discovered branches, default priority, protection badge, and branch selection.
-9. Launch a branch; verify package-first tap cards, category/search/page controls, smart map, technical table, history, releases, and Actions.
-10. Preview/download one text file and create a selected ZIP containing only selected paths plus the manifest.
-11. Click the complete download button; verify a website-hosted ZIP, exact commit in its name, valid ZIP signature, and no GitHub archive-link requirement.
-12. Open a historical commit and repeat card/complete download checks.
-13. Verify APK assets appear before other release assets and protected Actions downloads may require GitHub sign-in.
-14. Check responsive layout at 390 px and reduced-motion mode.
-15. Run static inspection and one Standard review in the secondary AI workspace.
-16. Confirm AI Markdown/JSON downloads; patch appears only for a valid unified diff.
-
-Do not call deployment successful solely because GitHub Actions is green: Hugging Face build and startup are separate stages.
-
-## Common failure modes
-
-### GitHub Action: invalid token or forbidden
-
-- Confirm the secret is named exactly `HF_TOKEN`.
-- Confirm the token has read/write permission only for `madarauchihagmailcom/My`.
-- Rotate the token if it may have been exposed.
-- Never paste the value into diagnostics.
-
-### Hub sync: invalid README metadata
-
-Hugging Face restricts `colorFrom` and `colorTo` to documented values. Run tests/metadata checks before pushing and inspect the first YAML front matter block.
-
-### Space build: dependency resolution conflict
-
-The managed Gradio runtime and Transformers must agree on `huggingface_hub`. Current Gradio 6 uses Hub 1.x, so the application requires Transformers 5.x. Reproduce with a clean pip resolver before changing bounds.
-
-### Space build: package/version unavailable
-
-- Use Python 3.12.12, matching ZeroGPU compatibility.
-- Avoid pinning managed Gradio, Torch, Spaces, or `huggingface_hub` in `requirements.txt`.
-- Keep application dependencies bounded to supported major versions.
-
-### Runtime: model or ZeroGPU registration unavailable
-
-The deterministic tabs and all RepoVault downloads should remain usable. Check container logs for model download, architecture, dtype, CUDA emulation, or ZeroGPU control-plane errors. Model placement remains at module initialization for ZeroGPU's optimized transfer path. If ZeroGPU task registration times out, the guarded decorators disable only model generation instead of crashing the entire repository product; restart or rebuild after the control plane recovers.
-
-### Runtime: GitHub rate limit
-
-Anonymous GitHub REST usage is limited. One initial Vault load requests metadata, tree, commits, releases, and workflow runs; file previews/ZIPs add blob requests. Wait for reset or configure an owner-controlled fine-grained read-only token. The application must continue rejecting private repositories even if the token can see them. Never use the token to provide anonymous protected Actions downloads.
-
-### Actions artifact link requests sign-in
-
-This is expected. Public run/artifact metadata is anonymously readable, but GitHub's artifact download endpoint requires Actions-read authentication. The product deliberately opens the official GitHub page rather than collecting a visitor token or proxying an owner credential.
-
-### Selected ZIP fails
-
-Check the user-facing reason: 20-file count, 25 MB per file, 50 MB total, sensitive credential/key path, missing historical blob, or GitHub quota. Do not increase public limits without measuring memory/compression/API effects and updating the threat model.
-
-### Runtime: long queue
-
-Use Quick or Standard depth and keep one generation focused. The 55-second declared duration influences ZeroGPU scheduling. Avoid increasing it without measuring actual generation.
-
-### No patch download
-
-This is expected when the model recommends no code change or returns a malformed/non-unified diff. Markdown and JSON should still be available. Do not weaken patch validation merely to force a file.
-
-## Monitoring signals
-
-Without adding invasive telemetry, watch:
-
-- GitHub Action conclusions and duration;
-- Hugging Face build/runtime stage;
-- startup/model initialization errors;
-- GitHub 403/429 frequency;
-- queue saturation and GPU timeout errors;
-- report export errors;
-- unexpected secret-redaction or prompt-injection counts in user-visible pipeline notes.
-
-The application disables Gradio analytics and does not intentionally persist visitor prompts or source.
+- **Model unavailable:** instant title lookup should still work; inspect model ID, dtype and ZeroGPU logs.
+- **ZeroGPU startup-report timeout:** rebuild once; the guarded registration keeps the CPU lookup surface available when possible.
+- **LRCLIB error:** retry later; AI transcription can still finish if the model is available.
+- **Audio decode error:** confirm the file is a valid MP3/M4A/WAV/FLAC/OGG/AAC and not DRM-protected.
+- **Weak singing output:** provide title/artist, force the correct language, or correct the returned editable LRC in the Android app.
 
 ## Rollback
 
-1. Identify the last known-good GitHub commit.
-2. Revert the breaking commit on the fixed deployment branch; do not force-push shared history.
-3. Let automatic sync deploy the revert.
-4. Verify Action, Space build, runtime, UI, and one static inspection.
-5. Document the root cause and add a regression test before reintroducing the change.
-
-If the Space is actively exposing sensitive output, pause the Space from Hugging Face settings while preparing the revert. Rotate any credential that may have been disclosed.
-
-## Credential rotation
-
-1. Create a new fine-grained Hugging Face token scoped only to the target Space.
-2. Replace the GitHub Actions `HF_TOKEN` secret.
-3. Trigger a workflow dispatch or safe documentation commit.
-4. Confirm sync and hardware steps pass.
-5. Revoke the old token.
-
-Do not maintain two long-lived active deployment tokens longer than necessary.
-
-## Capacity and storage
-
-- Model weights are managed by the Hugging Face runtime/cache.
-- Repository trees and listing records are held only in bounded process memory and Gradio session state.
-- Public metadata/source cache has finite entries and TTL; large Git blob byte responses are not globally cached.
-- Individual, selected, and complete snapshot downloads use `/tmp/taj-repovault`, restrictive permissions, two-hour retention, a 120-file cap, and a 2 GB shared byte budget.
-- Complete ZIPs stream to disk rather than RAM and stop at 500 MB compressed.
-- AI exports use `/tmp/taj-ai-reports` with independent retention/count controls.
-- Release assets and protected Actions downloads are not stored by the Space.
-- No database, vector store, repository clone, or long-lived worker is required.
-
-The design should not attempt to consume all available RAM or disk. Production reliability requires headroom for the runtime, model, concurrent sessions, dependency installation, and build layers.
+Revert the latest source commit and push the same fixed branch. Never restore the former repository explorer, Telegram bot, or leaked credentials as part of a rollback.

@@ -17,7 +17,10 @@ api = HfApi(token=TOKEN)
 try:
     runtime = api.request_space_hardware(repo_id=SPACE_ID, hardware="zero-a10g")
 except Exception as exc:
-    print(f"Unable to request ZeroGPU for {SPACE_ID}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    print(
+        f"Unable to request ZeroGPU for {SPACE_ID}: {type(exc).__name__}: {exc}",
+        file=sys.stderr,
+    )
     raise
 
 print(

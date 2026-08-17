@@ -1,47 +1,29 @@
-# Security policy
+# Security
 
-## Supported version
+## Product boundary
 
-The current `arena/01a00b5b-huggingface` deployment branch and the revision running on the public Hugging Face Space receive security fixes during active development.
+Lyr Online processes user-selected audio into lyrics. It does not execute uploads, install packages at runtime, expose a shell, accept arbitrary URLs, proxy traffic, collect third-party credentials, or publish lyrics automatically.
 
-## Reporting a vulnerability
+## Controls
 
-Do not publish live credentials, private repository source, personal data, or a weaponized proof of concept in a public GitHub issue.
+- Audio is capped at 80 MB and eight minutes.
+- Decoding produces mono PCM in memory; uploads are never executed.
+- LRCLIB is the only application-controlled external API host.
+- HTTP redirects from the provider are rejected.
+- Provider lists and lyric text lengths are bounded.
+- ZeroGPU transcription has concurrency, queue, and duration ceilings.
+- Generated LRC files use randomized names, private file permissions, and two-hour cleanup.
+- Errors do not echo audio, model prompts, tokens, or server paths.
+- No secret is embedded in the Android integration contract.
 
-Use GitHub's private vulnerability reporting feature for `tajhatAti/HuggingFace` when available. Include:
+## Privacy
 
-- affected commit and component;
-- impact and required attacker access;
-- minimal non-destructive reproduction using synthetic data;
-- whether the public Space is currently affected;
-- suggested mitigation if known.
+The Space is public. Audio uploaded for transcription is handled by the Hugging Face/Gradio runtime and the Space process. Lyr Online does not create a permanent audio archive, but it must not be treated as an end-to-end encrypted or private storage service. Upload only recordings you have the right to process.
 
-Never send a GitHub or Hugging Face token. If a token was exposed, revoke it immediately before reporting.
+## Credential incident in the source Lyr repository
 
-## Security design commitments
+The public `main` branch of `tajhatAti/Lyr` was observed to contain Telegram bot credentials and a GitHub personal access token in source. Those values must be considered compromised even if the files are later deleted. Revoke/rotate them at Telegram BotFather and GitHub Settings; never copy them into this Space or an APK.
 
-The public product will preserve:
+## Reporting
 
-- canonical GitHub-only network access;
-- public repositories only;
-- no repository, APK, archive, release asset, or workflow execution;
-- no shell, package installation, build, archive extraction, or clone;
-- no visitor credential collection or owner-token proxying of protected GitHub content;
-- no repository write/commit/push/workflow authority;
-- immutable commit/blob identity for proxied files and selected ZIPs;
-- fixed-host, commit-pinned, size/signature/integrity-validated streaming for complete source ZIPs;
-- repository-scoped official links for releases and Actions;
-- bounded branches, trees, card pages, files, selected/complete ZIPs, temporary storage, prompts, outputs, caches, queues, and artifacts;
-- credential/key path blocking in RepoVault and pre/post secret redaction in AI review;
-- explicit untrusted-source prompt boundaries;
-- transparent distinction between metadata, heuristics, and confirmed facts.
-
-Changes that weaken one of these commitments require an explicit threat-model update and dedicated regression tests.
-
-## Out of scope
-
-- Findings that only reproduce after an operator intentionally removes documented safety limits.
-- Model quality disagreements without a concrete safety or integrity impact.
-- Public information already visible in the selected public GitHub repository.
-- Denial of service requiring control of Hugging Face or GitHub infrastructure.
-- Automated scanner reports without a validated affected path.
+Report a vulnerability privately to the repository owner. Do not include live credentials or private audio in a public issue.

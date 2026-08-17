@@ -1,5 +1,4 @@
-# Gradio, PyTorch, spaces and huggingface_hub are managed by the HF Gradio/ZeroGPU runtime.
-# Gradio 6.24+ uses huggingface_hub 1.x; Transformers 4.x pins an incompatible Hub version.
+# Gradio, PyTorch, spaces, NumPy and huggingface_hub are managed by the Space runtime.
 transformers>=5.0.0,<6.0.0
 accelerate>=1.2.0,<2.0.0
 requests>=2.32.0,<3.0.0
