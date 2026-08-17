@@ -19,6 +19,7 @@ LANGUAGE_CODES = {
 }
 PREVIEW_CLIP_SECONDS = 8
 PREVIEW_START_FRACTIONS = (0.16, 0.46, 0.74)
+BENGALI_PROMPT = "বাংলা গান। বাংলা লিপিতে গানের কথা লিখুন।"
 
 
 def _segment_quality(segments: tuple[Any, ...]) -> float:
@@ -172,6 +173,9 @@ class CpuWhisperRecognizer:
                 beam_size=1,
                 best_of=1,
                 condition_on_previous_text=False,
+                initial_prompt=(
+                    BENGALI_PROMPT if detected_language == "bn" else None
+                ),
                 vad_filter=False,
                 word_timestamps=False,
             )
@@ -187,8 +191,11 @@ class CpuWhisperRecognizer:
             # Bengali is the acoustically plausible interpretation.
             if (
                 forced_language is None
-                and detected_language in {"en", "hi", "ur"}
                 and detected_language != "bn"
+                and (
+                    detected_language in {"en", "hi", "ur"}
+                    or detected_probability < 0.5
+                )
             ):
                 bengali_generated, _ = self.model.transcribe(
                     preview_audio,
@@ -197,6 +204,7 @@ class CpuWhisperRecognizer:
                     beam_size=1,
                     best_of=1,
                     condition_on_previous_text=False,
+                    initial_prompt=BENGALI_PROMPT,
                     vad_filter=False,
                     word_timestamps=False,
                 )
@@ -247,6 +255,7 @@ class CpuWhisperRecognizer:
                 beam_size=3,
                 best_of=3,
                 condition_on_previous_text=False,
+                initial_prompt=BENGALI_PROMPT if language == "bn" else None,
                 vad_filter=False,
                 word_timestamps=False,
             )
