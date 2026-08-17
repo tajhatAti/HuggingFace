@@ -106,19 +106,25 @@ class OnlineLyricsClient(
         if (declaredSize > MAX_UPLOAD_BYTES) {
             throw IOException("This song is larger than the 16 GB upload ceiling.")
         }
+        val prefix = buildString {
+            append("--$boundary\r\n")
+            append("Content-Disposition: form-data; name=\"files\"; filename=\"$safeName\"\r\n")
+            append("Content-Type: $mime\r\n\r\n")
+        }.toByteArray(Charsets.UTF_8)
+        val suffix = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
         val connection = open("$SPACE_ROOT/gradio_api/upload", "POST", UPLOAD_TIMEOUT_MS).apply {
             doOutput = true
-            setChunkedStreamingMode(BUFFER_BYTES)
+            if (declaredSize >= 0L) {
+                setFixedLengthStreamingMode(prefix.size.toLong() + declaredSize + suffix.size)
+            } else {
+                setChunkedStreamingMode(BUFFER_BYTES)
+            }
             setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         }
         activeConnection = connection
         try {
             BufferedOutputStream(connection.outputStream, BUFFER_BYTES).use { output ->
-                output.write("--$boundary\r\n".toByteArray())
-                output.write(
-                    "Content-Disposition: form-data; name=\"files\"; filename=\"$safeName\"\r\n".toByteArray()
-                )
-                output.write("Content-Type: $mime\r\n\r\n".toByteArray())
+                output.write(prefix)
                 resolver.openInputStream(uri)?.use { raw ->
                     BufferedInputStream(raw, BUFFER_BYTES).use { input ->
                         val buffer = ByteArray(BUFFER_BYTES)
@@ -139,7 +145,7 @@ class OnlineLyricsClient(
                         }
                     }
                 } ?: throw IOException("The selected audio file cannot be opened.")
-                output.write("\r\n--$boundary--\r\n".toByteArray())
+                output.write(suffix)
                 output.flush()
             }
             val body = readResponse(connection)

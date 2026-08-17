@@ -7,6 +7,8 @@ import sys
 
 from huggingface_hub import HfApi
 
+from smoke_space import run_deployed_smoke_test
+
 SPACE_ID = os.getenv("HF_SPACE_ID", "madarauchihagmailcom/My")
 TOKEN = os.getenv("HF_TOKEN", "").strip()
 
@@ -27,3 +29,4 @@ print(
     f"Configured {SPACE_ID}: stage={runtime.stage}, "
     f"hardware={runtime.hardware}, requested={runtime.requested_hardware}"
 )
+run_deployed_smoke_test(api)

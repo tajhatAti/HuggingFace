@@ -864,7 +864,9 @@ class PlayerService : Service(), OnDeviceAiLyricsManager.Listener {
         if (!success && currentSong()?.id == song.id) {
             updateLyricsLoadState(LyricsLoadState.NOT_FOUND)
         }
-        OnDeviceAiLyricsManager.clearFinishedResult()
+        // Preserve a failed/canceled state long enough for LyricsActivity to show the real HTTP,
+        // TLS, timeout, or server message. The next explicit retry clears it before starting.
+        if (success) OnDeviceAiLyricsManager.clearFinishedResult()
         if (automaticLyricsSong?.id == song.id) automaticLyricsSong = null
         startPendingAutomaticLyricsIfNeeded(song.id)
     }
