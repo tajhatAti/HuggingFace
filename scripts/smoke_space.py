@@ -11,10 +11,11 @@ from huggingface_hub import HfApi
 
 SPACE_ID = "madarauchihagmailcom/My"
 SPACE_URL = "https://madarauchihagmailcom-my.hf.space"
-# Public-domain recording of John F. Kennedy, distributed by whisper.cpp for ASR tests.
+# Public-domain 2:55 vocal recording of Bangladesh's national anthem from Wikimedia Commons.
 TEST_AUDIO_URL = (
-    "https://raw.githubusercontent.com/ggml-org/whisper.cpp/"
-    "master/samples/jfk.wav"
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/"
+    "Amar_Sonar_Bangla_-_official_vocal_music_of_the_"
+    "National_anthem_of_Bangladesh.ogg"
 )
 USER_AGENT = "Lyr-Deployment-Smoke/1.0"
 
@@ -74,7 +75,7 @@ def _upload_audio(audio: bytes) -> str:
     response = _request(
         "POST",
         f"{SPACE_URL}/gradio_api/upload",
-        files={"files": ("jfk-public-domain.wav", audio, "audio/wav")},
+        files={"files": ("amar-sonar-bangla-public-domain.ogg", audio, "audio/ogg")},
     )
     payload = response.json()
     if not isinstance(payload, list) or not payload:
@@ -102,7 +103,7 @@ def _start_transcription(path: str) -> str:
                 },
                 "title": "",
                 "artist": "",
-                "language_label": "English",
+                "language_label": "Auto detect",
             }
         ).encode(),
     )
@@ -151,6 +152,12 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
         raise SmokeTestError(
             "Full transcription did not return successful synchronized lyrics: "
             f"{structured!r}"
+        )
+    if structured.get("language") != "bn" or not any(
+        "\u0980" <= character <= "\u09ff" for character in lrc
+    ):
+        raise SmokeTestError(
+            "Auto detection did not return native Bengali-script synchronized lyrics."
         )
     result = {
         "revision": revision,
