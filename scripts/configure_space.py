@@ -29,4 +29,14 @@ print(
     f"Configured {SPACE_ID}: stage={runtime.stage}, "
     f"hardware={runtime.hardware}, requested={runtime.requested_hardware}"
 )
-run_deployed_smoke_test(api)
+try:
+    run_deployed_smoke_test(api)
+except Exception as exc:
+    message = (
+        str(exc)
+        .replace("%", "%25")
+        .replace("\r", "%0D")
+        .replace("\n", "%0A")
+    )
+    print(f"::error title=Deployed Bengali audio smoke failed::{type(exc).__name__}: {message}")
+    raise

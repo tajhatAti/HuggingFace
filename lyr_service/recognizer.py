@@ -116,10 +116,37 @@ class CpuWhisperRecognizer:
             preview_parts.append(clip)
         preview_audio = np.concatenate(preview_parts) if preview_parts else samples
         forced_language = LANGUAGE_CODES.get(language_label)
+        detected_language = forced_language
+        detected_probability = 1.0 if forced_language else 0.0
         try:
+            if detected_language is None:
+                detection = self.model.detect_language(
+                    samples,
+                    vad_filter=True,
+                    language_detection_segments=3,
+                    language_detection_threshold=0.35,
+                )
+                detected_language = str(detection[0])
+                detected_probability = float(detection[1])
+                all_probabilities = detection[2] if len(detection) > 2 else ()
+                bengali_probability = next(
+                    (
+                        float(probability)
+                        for code, probability in all_probabilities
+                        if code == "bn"
+                    ),
+                    0.0,
+                )
+                if (
+                    detected_language in {"en", "hi", "ur"}
+                    and bengali_probability >= 0.18
+                    and bengali_probability >= detected_probability * 0.5
+                ):
+                    detected_language = "bn"
+                    detected_probability = bengali_probability
             generated, info = self.model.transcribe(
                 preview_audio,
-                language=forced_language,
+                language=detected_language,
                 task="transcribe",
                 beam_size=1,
                 best_of=1,
@@ -130,8 +157,10 @@ class CpuWhisperRecognizer:
             text = normalize_text(
                 " ".join(str(item.text or "") for item in generated)
             )
-            language = forced_language or str(getattr(info, "language", "auto"))
-            probability = float(getattr(info, "language_probability", 0.0) or 0.0)
+            language = detected_language or str(getattr(info, "language", "auto"))
+            probability = detected_probability or float(
+                getattr(info, "language_probability", 0.0) or 0.0
+            )
         except Exception as exc:
             raise RecognitionError(
                 f"AI preview could not inspect this audio: {type(exc).__name__}"
