@@ -21,6 +21,27 @@ PREVIEW_CLIP_SECONDS = 8
 PREVIEW_START_FRACTIONS = (0.16, 0.46, 0.74)
 
 
+def _segment_quality(segments: tuple[Any, ...]) -> float:
+    """Return a duration-weighted mean Whisper log probability."""
+
+    weighted_total = 0.0
+    duration_total = 0.0
+    for segment in segments:
+        text = normalize_text(str(getattr(segment, "text", "") or ""))
+        if not text:
+            continue
+        start = float(getattr(segment, "start", 0.0) or 0.0)
+        end = float(getattr(segment, "end", start + 0.1) or start + 0.1)
+        duration = max(0.1, end - start)
+        raw_probability = getattr(segment, "avg_logprob", -10.0)
+        log_probability = float(
+            raw_probability if raw_probability is not None else -10.0
+        )
+        weighted_total += log_probability * duration
+        duration_total += duration
+    return weighted_total / duration_total if duration_total else -10.0
+
+
 class WhisperRecognizer:
     def __init__(self, pipeline: Callable[..., dict[str, Any]]) -> None:
         self.pipeline = pipeline
@@ -154,9 +175,50 @@ class CpuWhisperRecognizer:
                 vad_filter=False,
                 word_timestamps=False,
             )
+            items = tuple(generated)
             text = normalize_text(
-                " ".join(str(item.text or "") for item in generated)
+                " ".join(str(item.text or "") for item in items)
             )
+            quality = _segment_quality(items)
+
+            # Singing can make Whisper's language token over-favor English/Hindi even
+            # while a Bengali-constrained decode clearly fits the vocals. Compare a
+            # Bengali decode before deciding; this also guarantees native script when
+            # Bengali is the acoustically plausible interpretation.
+            if (
+                forced_language is None
+                and detected_language in {"en", "hi", "ur"}
+                and detected_language != "bn"
+            ):
+                bengali_generated, _ = self.model.transcribe(
+                    preview_audio,
+                    language="bn",
+                    task="transcribe",
+                    beam_size=1,
+                    best_of=1,
+                    condition_on_previous_text=False,
+                    vad_filter=False,
+                    word_timestamps=False,
+                )
+                bengali_items = tuple(bengali_generated)
+                bengali_text = normalize_text(
+                    " ".join(str(item.text or "") for item in bengali_items)
+                )
+                bengali_quality = _segment_quality(bengali_items)
+                bengali_characters = sum(
+                    "\u0980" <= character <= "\u09ff"
+                    for character in bengali_text
+                )
+                if (
+                    bengali_characters >= 12
+                    and bengali_quality >= quality - 0.12
+                ):
+                    text = bengali_text
+                    detected_language = "bn"
+                    detected_probability = max(
+                        bengali_probability,
+                        min(detected_probability, 0.49),
+                    )
             language = detected_language or str(getattr(info, "language", "auto"))
             probability = detected_probability or float(
                 getattr(info, "language_probability", 0.0) or 0.0
