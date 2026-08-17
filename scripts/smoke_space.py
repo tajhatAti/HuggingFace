@@ -119,7 +119,7 @@ def _await_transcription(event_id: str) -> tuple[str, dict[str, Any]]:
         f"{SPACE_URL}/gradio_api/call/transcribe_song/{event_id}",
         headers={"Accept": "text/event-stream"},
         stream=True,
-        timeout=(30, 420),
+        timeout=(30, 900),
     )
     event = ""
     for raw_line in response.iter_lines(decode_unicode=True):

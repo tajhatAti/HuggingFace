@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Callable
 from typing import Any
 
@@ -41,6 +42,46 @@ def _segment_quality(segments: tuple[Any, ...]) -> float:
         weighted_total += log_probability * duration
         duration_total += duration
     return weighted_total / duration_total if duration_total else -10.0
+
+
+def _ensure_bengali_script(text: str) -> str:
+    """Convert Whisper's occasional related-Indic glyph drift to Bengali glyphs."""
+
+    special = {
+        "ऱ": "র",
+        "ऴ": "ল",
+        "व": "ব",
+        "क़": "ক",
+        "ख़": "খ",
+        "ग़": "গ",
+        "ज़": "জ",
+        "ड़": "ড়",
+        "ढ़": "ঢ়",
+        "फ़": "ফ",
+        "य़": "য়",
+        "ੜ": "ড়",
+        "ਵ": "ব",
+    }
+    converted: list[str] = []
+    for character in text:
+        if character in special:
+            converted.append(special[character])
+            continue
+        codepoint = ord(character)
+        target = None
+        if 0x0900 <= codepoint <= 0x097F:
+            target = codepoint + 0x80
+        elif 0x0A00 <= codepoint <= 0x0A7F:
+            target = codepoint - 0x80
+        if (
+            target is not None
+            and 0x0980 <= target <= 0x09FF
+            and unicodedata.category(chr(target)) != "Cn"
+        ):
+            converted.append(chr(target))
+        else:
+            converted.append(character)
+    return "".join(converted)
 
 
 class WhisperRecognizer:
@@ -183,6 +224,8 @@ class CpuWhisperRecognizer:
             text = normalize_text(
                 " ".join(str(item.text or "") for item in items)
             )
+            if detected_language == "bn":
+                text = _ensure_bengali_script(text)
             quality = _segment_quality(items)
 
             # Singing can make Whisper's language token over-favor English/Hindi even
@@ -209,8 +252,10 @@ class CpuWhisperRecognizer:
                     word_timestamps=False,
                 )
                 bengali_items = tuple(bengali_generated)
-                bengali_text = normalize_text(
-                    " ".join(str(item.text or "") for item in bengali_items)
+                bengali_text = _ensure_bengali_script(
+                    normalize_text(
+                        " ".join(str(item.text or "") for item in bengali_items)
+                    )
                 )
                 bengali_quality = _segment_quality(bengali_items)
                 bengali_characters = sum(
@@ -259,12 +304,17 @@ class CpuWhisperRecognizer:
                 vad_filter=False,
                 word_timestamps=False,
             )
+            detected = language or normalize_text(
+                str(getattr(info, "language", "auto"))
+            )
             segments: list[TimedSegment] = []
             text_parts: list[str] = []
             for item in generated:
                 start = max(0.0, float(item.start))
                 end = min(duration_seconds, max(start + 0.1, float(item.end)))
                 text = normalize_text(str(item.text or ""))
+                if detected == "bn":
+                    text = _ensure_bengali_script(text)
                 if text and end > start:
                     segments.append(TimedSegment(start, end, text))
                     text_parts.append(text)
@@ -277,5 +327,4 @@ class CpuWhisperRecognizer:
             raise RecognitionError(
                 "No usable sung words were recognized in this recording."
             )
-        detected = language or normalize_text(str(getattr(info, "language", "auto")))
         return transcript, tuple(segments), detected or "auto"

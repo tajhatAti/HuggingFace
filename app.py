@@ -25,7 +25,10 @@ logging.basicConfig(
 )
 log = logging.getLogger("lyr-online")
 
-MODEL_ID = os.getenv("WHISPER_CPU_MODEL_ID", "Systran/faster-whisper-small")
+MODEL_ID = os.getenv(
+    "WHISPER_CPU_MODEL_ID",
+    "dropbox-dash/faster-whisper-large-v3-turbo",
+)
 CPU_THREADS = max(1, min(8, os.cpu_count() or 2))
 CPU_MODEL = None
 CPU_RECOGNIZER = None

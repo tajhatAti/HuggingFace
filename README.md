@@ -9,7 +9,7 @@ python_version: 3.12.12
 pinned: false
 license: apache-2.0
 models:
-  - Systran/faster-whisper-small
+  - dropbox-dash/faster-whisper-large-v3-turbo
 ---
 
 # Lyr Online

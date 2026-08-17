@@ -32,9 +32,9 @@ Android app or minimal Space UI
 - `lyr_service/service.py` — retrieval-first orchestration.
 - `lyr_service/domain.py` — immutable API records.
 
-## Why quota-free Faster-Whisper small
+## Why quota-free Faster-Whisper large-v3-turbo
 
-`Systran/faster-whisper-small` runs through CTranslate2 int8 on the Space's free CPU. It trades some accuracy and speed for predictable personal availability: no daily ZeroGPU allowance can block the website or Android app. All available CPU threads are used, one transcription runs at a time, and RAM holds the model/audio safely but does not replace CPU compute. A short preview detects Bengali and identifies the song before full listening; native bn is then forced to prevent Banglish output.
+`dropbox-dash/faster-whisper-large-v3-turbo` runs through CTranslate2 int8 on the Space's free CPU. It uses more of the available 16 GB RAM and can take longer than the small model, but its stronger multilingual recognition is necessary for Bengali songs while remaining independent of daily ZeroGPU allowances. All available CPU threads are used, one transcription runs at a time, and RAM holds the model/audio safely but does not replace CPU compute. A short preview detects Bengali and identifies the song before full listening; native bn plus a Bengali-script safeguard prevents Hindi/Punjabi glyph drift and Latin-script Banglish output.
 
 ## Lyr compatibility
 
