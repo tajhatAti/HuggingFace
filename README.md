@@ -1,6 +1,6 @@
 ---
-title: Taj GitHub Repository Vault
-emoji: 🗃️
+title: RepoVault 3D
+emoji: 💎
 colorFrom: green
 colorTo: yellow
 sdk: gradio
@@ -14,29 +14,40 @@ models:
 
 # Taj GitHub Repository Vault
 
-A production-oriented, repository-first explorer and downloader for **public GitHub repositories**. Paste a repository URL to browse an immutable file snapshot, preview or download a file, package selected files, download the full source archive, inspect commit history, browse any commit, collect published release assets, and discover GitHub Actions artifacts.
+A production-oriented, mobile-first **3D glass repository command center** for public GitHub repositories. The interface now follows a serial flow: connect a repository, discover/select its branches, open an immutable snapshot, tap visible file cards, then preview or download without navigating a wall of dropdowns.
 
-The previous Qwen-powered AI repository reviewer remains available as a secondary specialist workspace.
+RepoVault includes **160 auditable capabilities** across branch discovery, smart file groups, APK/release access, website-hosted complete ZIPs, commit time travel, Actions metadata, security controls, accessibility, and the preserved Qwen AI reviewer.
 
 ## Product capabilities
 
 ### Repository explorer
 
 - Canonical `owner/repository` and `https://github.com/owner/repository` validation.
-- Branch, tag, or commit selection; a blank ref resolves to the default branch.
-- Recursive Git tree index pinned to the commit SHA returned by GitHub.
-- Searchable path list and paginated file table across the complete bounded tree, with type, size, blob SHA, and proxy status.
-- Safe text preview for supported files and metadata-only treatment for binary files.
-- Individual-file preparation from the exact Git blob ID.
-- Potential credential/private-key files are listed but not previewed or proxied.
+- Two-step onboarding with up to 300 discovered branches, default-branch priority, protected badges, and commit-SHA preview.
+- Searchable branch selector plus custom tag/commit support.
+- Recursive Git tree index pinned to the exact commit returned by GitHub.
+- 160 visible tap-to-select file cards per page instead of an individual-file dropdown.
+- Package-first sorting and filters for APK/AAB/installers, code, archives, media, docs, tests, config/CI, data, and other files.
+- Complete-tree path search, paginated technical table, smart category counts, and largest-file insights.
+- Safe text preview, binary metadata, exact-blob individual download, and multi-select ZIP actions.
+- Potential credential/private-key files are listed but not individually previewed or repackaged.
 
 ### Downloads
 
 - Individual files up to 25 MB through an ephemeral Gradio download.
 - Selected-file ZIP generation for up to 20 files and 50 MB of uncompressed content.
 - Archive paths are validated against traversal and exact blob IDs are used.
-- Complete snapshot ZIP and TAR.GZ links point directly to GitHub and are pinned to an immutable commit.
-- Temporary files use randomized names, restrictive permissions, two-hour expiry, and a count ceiling.
+- **Download every repository file** streams the commit-pinned ZIP from the fixed GitHub codeload host into RepoVault and returns it directly on the website.
+- Complete ZIPs have a 500 MB compressed ceiling; the shared temporary directory has a 2 GB budget.
+- Temporary files use randomized names, restrictive permissions, two-hour expiry, count cleanup, and byte-budget cleanup.
+- Archives are never cloned, extracted, imported, built, or executed.
+
+### Mobile glass and mandatory 3D experience
+
+- Generated cinematic 3D vault artwork in mobile-optimized `assets/repovault-3d.webp`.
+- CSS perspective depth, hover tilt, floating vault motion, orbiting particles, glow, and animated glass surfaces.
+- Mobile stacking, large touch targets, sticky selection actions, compact preview, horizontally scrollable navigation, and one-hand controls.
+- Operating-system `prefers-reduced-motion` support disables non-essential animation for accessibility.
 
 ### History and historical snapshots
 
@@ -84,7 +95,7 @@ RepoVault is a public, read-only data viewer. It does **not**:
 - proxy common credential/private-key filenames;
 - use an owner token to grant anonymous visitors access to protected GitHub content.
 
-GitHub source archives and release assets remain first-party GitHub downloads. This prevents the Space from becoming an unbounded large-file relay while preserving complete-repository and release download functionality.
+Complete source ZIPs are streamed only from the fixed `codeload.github.com` host with redirect rejection, ZIP-signature and central-directory validation, a 500 MB ceiling, and a 2 GB temporary-storage budget. Release assets remain repository-scoped first-party GitHub downloads; protected Actions downloads remain on GitHub's authorization flow.
 
 See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) for trust boundaries and abuse cases.
 
@@ -107,7 +118,7 @@ Gradio repository-first UI
   │       ├── safe text/binary preview decision
   │       ├── individual ephemeral download
   │       ├── bounded selected-file ZIP
-  │       └── immutable GitHub archive/release/run links
+  │       └── website-hosted complete ZIP + scoped release/run links
   │
   └── secondary AI review workspace
           ├── sanitized repository intelligence
@@ -121,13 +132,16 @@ Detailed component responsibilities are in [`docs/ARCHITECTURE.md`](docs/ARCHITE
 
 | Control | Current bound |
 |---|---:|
+| Discovered branches | 300 |
 | Recursive tree | 20,000 files |
-| File paths displayed per search | 1,000 |
-| File table rows per search | 500 |
+| File cards per page | 160 |
+| File table rows per page | 500 |
 | Text preview | 300,000 bytes |
 | Individual proxied file | 25,000,000 bytes |
 | Selected files per ZIP | 20 |
 | Selected ZIP uncompressed input | 50,000,000 bytes |
+| Complete snapshot ZIP | 500,000,000 bytes |
+| Vault temporary storage budget | 2,000,000,000 bytes |
 | Recent commits | 50 |
 | Changed files per commit detail | 300 |
 | Published releases | 20 |
@@ -182,6 +196,7 @@ The only deployment credential is the GitHub Actions secret `HF_TOKEN`, scoped t
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, data flow, and extension rules
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — trust zones, abuse cases, and controls
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — deployment, verification, troubleshooting, and rollback
+- [`docs/POLICY_COMPATIBILITY.md`](docs/POLICY_COMPATIBILITY.md) — 50 restricted-use examples, 150 policy-compatible examples, and the RepoVault deployment decision
 - [`SECURITY.md`](SECURITY.md) — vulnerability reporting and security commitments
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — change and validation requirements
 

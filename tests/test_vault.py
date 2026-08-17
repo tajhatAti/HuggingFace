@@ -3,12 +3,14 @@ from __future__ import annotations
 import tempfile
 import unittest
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from code_assistant.domain import RepositoryFile
 from code_assistant.github_client import (
     ArtifactRecord,
+    BranchRecord,
     CommitRecord,
     GitHubError,
     ReleaseAssetRecord,
@@ -21,10 +23,15 @@ from code_assistant.vault import (
     MAX_SELECTED_FILES,
     VaultSession,
     archive_urls,
+    branch_choices,
     build_selected_zip,
+    discover_repository,
+    download_complete_zip,
+    file_category,
     file_page_status,
     files_table,
     filter_files,
+    gallery_file_choices,
     inspect_file,
     is_sensitive_download_path,
     load_vault,
@@ -47,6 +54,16 @@ class FakeBlobClient:
         return value
 
 
+class FakeArchiveClient:
+    def download_archive_zip(self, repo, commit_sha, destination, *, max_bytes):
+        del repo, commit_sha
+        payload = b"PK-complete-snapshot"
+        if len(payload) > max_bytes:
+            raise AssertionError("fixture exceeds bound")
+        Path(destination).write_bytes(payload)
+        return len(payload)
+
+
 class FakeVaultLoadClient:
     def __init__(self, *, private: bool = False, fail_commits: bool = False):
         self.private = private
@@ -60,6 +77,13 @@ class FakeVaultLoadClient:
             description="Fixture",
             html_url=f"https://github.com/{repo.full_name}",
             private=self.private,
+        )
+
+    def list_branches(self, repo, *, limit):
+        del repo, limit
+        return (
+            BranchRecord("feature/mobile", "e" * 40),
+            BranchRecord("main", "f" * 40, protected=True),
         )
 
     def tree_snapshot(self, repo, ref):
@@ -124,6 +148,13 @@ class VaultTests(unittest.TestCase):
             load_vault("octo-owner/vault-repo", client=client)
         self.assertFalse(client.tree_called)
 
+    def test_discovery_lists_default_branch_first(self):
+        discovery = discover_repository("octo-owner/vault-repo", client=FakeVaultLoadClient())
+        choices = branch_choices(discovery)
+        self.assertEqual(choices[0][1], "main")
+        self.assertIn("protected", choices[0][0])
+        self.assertEqual(len(discovery.branches), 2)
+
     def test_optional_listing_failure_degrades_with_warning(self):
         client = FakeVaultLoadClient(fail_commits=True)
         session = load_vault("octo-owner/vault-repo", client=client)
@@ -139,6 +170,19 @@ class VaultTests(unittest.TestCase):
         self.assertIn("page 2/2", file_page_status(self.session, page=2, page_size=2))
         with self.assertRaisesRegex(ValueError, "500"):
             filter_files(self.session, "x" * 501)
+
+    def test_gallery_prioritizes_packages_and_filters_categories(self):
+        files = self.files + (
+            RepositoryFile("build/app-release.apk", 4096, "9" * 40),
+            RepositoryFile("docs/guide.md", 50, "8" * 40),
+        )
+        session = replace(self.session, snapshot=TreeSnapshot(commit_sha="e" * 40, files=files))
+        choices = gallery_file_choices(session)
+        self.assertEqual(choices[0][1], "build/app-release.apk")
+        apk_choices = gallery_file_choices(session, category="Apps & packages")
+        self.assertEqual([value for _, value in apk_choices], ["build/app-release.apk"])
+        self.assertEqual(file_category("src/app.py"), "Source code")
+        self.assertEqual(file_category("tests/test_app.py"), "Tests")
 
     def test_archive_urls_pin_exact_commit(self):
         zip_url, tar_url = archive_urls(self.session)
@@ -164,6 +208,15 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(binary.content, "")
             self.assertEqual(Path(text.download_path or "").read_bytes(), b"print('hello')\n")
             self.assertEqual(Path(binary.download_path or "").read_bytes(), b"\x89PNG\x00raw")
+
+    def test_complete_zip_is_returned_from_private_temp_storage(self):
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "code_assistant.vault.VAULT_ROOT", Path(directory)
+        ):
+            path, status = download_complete_zip(self.session, client=FakeArchiveClient())
+            self.assertEqual(Path(path).read_bytes(), b"PK-complete-snapshot")
+            self.assertIn("Complete snapshot ready", status)
+            self.assertIn(self.session.exact_ref[:12], Path(path).name)
 
     def test_selected_zip_preserves_paths_and_writes_manifest(self):
         client = FakeBlobClient({"a" * 40: b"read me", "b" * 40: b"print(1)"})

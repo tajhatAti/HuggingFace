@@ -25,9 +25,10 @@ Install full runtime requirements only when testing the Gradio/model integration
 
 ## Changing repository downloads
 
-- Keep complete repositories and release assets on first-party GitHub URLs.
-- Fetch proxied files only by exact tree-provided blob SHA.
+- Stream complete repositories only from the fixed first-party GitHub codeload host; keep release assets on repository-scoped first-party URLs.
+- Fetch individual/selected files only by exact tree-provided blob SHA.
 - Validate every selected ZIP path and preserve file-count, per-file, and total-byte ceilings.
+- Complete ZIP changes must preserve fixed host, redirect rejection, signature validation, 500 MB stream ceiling, partial-file cleanup, retention, and 2 GB storage budget.
 - Never extract, execute, import, or render active binary/HTML content server-side.
 - Do not accept visitor tokens or use an owner token to expose protected/private resources.
 - Add positive tests plus host, traversal, sensitive-path, size, count, expiry, and malformed-response tests.

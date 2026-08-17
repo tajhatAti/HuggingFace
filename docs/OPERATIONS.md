@@ -25,14 +25,16 @@ Verify in this order:
 4. `Request free ZeroGPU hardware` passed.
 5. Space metadata reports SDK `gradio` and requested/current hardware `zero-a10g`.
 6. Runtime stage reaches `RUNNING`.
-7. Space homepage renders the GitHub Repository Vault header and repository search dock.
-8. Open a small known public repository; Explorer shows an exact commit, file table, history, releases, and Actions panels.
-9. Preview/download one text file, create a small selected ZIP, and verify the ZIP contains only selected paths plus the manifest.
-10. Verify complete ZIP/TAR links point directly to `github.com` and contain the exact commit SHA.
-11. Open a historical commit snapshot and verify Explorer/archive links change to that commit.
-12. Verify release assets and Actions artifacts use official GitHub links; protected Actions downloads may require GitHub sign-in.
-13. Run static inspection and one Standard review in the secondary AI workspace.
-14. Confirm AI Markdown/JSON downloads; patch appears only when the model returns a valid unified diff.
+7. Space homepage renders the animated RepoVault 3D artwork and glass serial onboarding.
+8. Connect a small public repository; verify all discovered branches, default priority, protection badge, and branch selection.
+9. Launch a branch; verify package-first tap cards, category/search/page controls, smart map, technical table, history, releases, and Actions.
+10. Preview/download one text file and create a selected ZIP containing only selected paths plus the manifest.
+11. Click the complete download button; verify a website-hosted ZIP, exact commit in its name, valid ZIP signature, and no GitHub archive-link requirement.
+12. Open a historical commit and repeat card/complete download checks.
+13. Verify APK assets appear before other release assets and protected Actions downloads may require GitHub sign-in.
+14. Check responsive layout at 390 px and reduced-motion mode.
+15. Run static inspection and one Standard review in the secondary AI workspace.
+16. Confirm AI Markdown/JSON downloads; patch appears only for a valid unified diff.
 
 Do not call deployment successful solely because GitHub Actions is green: Hugging Face build and startup are separate stages.
 
@@ -122,9 +124,10 @@ Do not maintain two long-lived active deployment tokens longer than necessary.
 - Model weights are managed by the Hugging Face runtime/cache.
 - Repository trees and listing records are held only in bounded process memory and Gradio session state.
 - Public metadata/source cache has finite entries and TTL; large Git blob byte responses are not globally cached.
-- Individual and selected-file downloads use `/tmp/taj-repovault`, restrictive permissions, two-hour retention, and a 120-file cap.
-- AI exports use `/tmp/taj-ai-reports` with the same retention/count policy.
-- Full repository archives, release assets, and Actions downloads are not stored by the Space.
+- Individual, selected, and complete snapshot downloads use `/tmp/taj-repovault`, restrictive permissions, two-hour retention, a 120-file cap, and a 2 GB shared byte budget.
+- Complete ZIPs stream to disk rather than RAM and stop at 500 MB compressed.
+- AI exports use `/tmp/taj-ai-reports` with independent retention/count controls.
+- Release assets and protected Actions downloads are not stored by the Space.
 - No database, vector store, repository clone, or long-lived worker is required.
 
 The design should not attempt to consume all available RAM or disk. Production reliability requires headroom for the runtime, model, concurrent sessions, dependency installation, and build layers.

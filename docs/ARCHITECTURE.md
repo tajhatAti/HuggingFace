@@ -10,7 +10,7 @@ Primary goals:
 2. Never execute, clone, install, build, or extract repository-controlled content.
 3. Pin every file operation to a commit and exact Git blob ID.
 4. Support useful file, history, release, and Actions workflows with explicit limits.
-5. Keep large/full downloads on official GitHub endpoints.
+5. Stream complete snapshots only from GitHub's fixed codeload host with disk/byte limits.
 6. Never collect visitor credentials or expose protected resources through an owner token.
 7. Keep deterministic repository logic independently testable from Gradio and ZeroGPU.
 
@@ -43,13 +43,16 @@ No step invokes a shell, Git client, archive extractor, compiler, package manage
 
 Owns Gradio composition, event wiring, error boundaries, model lifecycle, and ZeroGPU-decorated inference. The repository-first interface has seven workspaces:
 
-1. Explorer
-2. Downloads
-3. Commit history
-4. Releases & APKs
+1. Browse & select
+2. Download everything
+3. APKs & releases
+4. Commit time travel
 5. Actions artifacts
 6. AI review
-7. Trust & limits
+7. 160+ feature catalog
+8. Trust & limits
+
+A serial onboarding panel precedes the workspaces: repository validation → branch discovery/selection → immutable workspace launch. The primary explorer uses visible multi-select file cards rather than a single-file dropdown.
 
 The primary load event calls `load_vault_ui`, renders all anonymously available GitHub metadata, and stores an immutable `VaultSession` in Gradio session state. File, ZIP, commit, and artifact events require that state and cannot silently switch repositories.
 
@@ -71,6 +74,7 @@ Repository-vault operations include:
 
 - repository metadata;
 - recursive tree snapshots;
+- up to 300 selectable branch records with protection and SHA metadata;
 - recent commit records;
 - changed-file metadata for a commit;
 - published releases and attached assets;
@@ -94,7 +98,9 @@ Responsibilities:
 - classify downloaded bytes as text or binary without executing them;
 - write individual downloads under randomized private-mode `/tmp` names;
 - assemble selected files from exact blob SHAs into a traversal-safe ZIP;
-- pin complete archive URLs to the resolved commit SHA;
+- classify and sort visible file cards into package/code/archive/media/docs/tests/config/data groups;
+- stream complete commit-pinned ZIPs from fixed `codeload.github.com` without authorization headers;
+- validate ZIP signature and central directory, compressed byte ceiling, retention, count, and total temporary-storage budget;
 - validate release assets as repository-scoped HTTPS `github.com` URLs;
 - build official GitHub workflow run/artifact links.
 
@@ -156,7 +162,14 @@ GitHub response records in `github_client.py` are immutable:
 
 ### Complete repository
 
-Complete ZIP and TAR.GZ links use `https://github.com/{owner}/{repo}/archive/{commit}`. GitHub creates and serves the archive. RepoVault does not proxy, inspect, store, or meter it.
+1. The active `VaultSession` provides a validated owner/repository and exact commit SHA.
+2. `GitHubClient` constructs only `https://codeload.github.com/{owner}/{repo}/zip/{sha}` and sends no authorization header.
+3. Redirects and non-success responses are rejected.
+4. Content-Length and streamed bytes are limited to 500 MB; the payload must have a ZIP signature and readable central directory.
+5. A `.part` file is atomically renamed only after success.
+6. The completed file is returned through Gradio, retained for at most two hours, and included in the 2 GB shared temporary budget.
+
+The archive is never extracted or executed.
 
 ### Release assets
 

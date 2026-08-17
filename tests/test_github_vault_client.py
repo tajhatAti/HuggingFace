@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import base64
+import io
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import requests
@@ -22,6 +26,13 @@ def response(status: int, payload=None, headers=None):
     return result
 
 
+def zip_payload() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("repository-main/README.md", "hello")
+    return output.getvalue()
+
+
 class GitHubVaultClientTests(unittest.TestCase):
     def setUp(self):
         self.client = GitHubClient(timeout=5)
@@ -32,6 +43,56 @@ class GitHubVaultClientTests(unittest.TestCase):
         for invalid in ("main", "abc", "a" * 65, "abc123/other"):
             with self.subTest(value=invalid), self.assertRaises(GitHubError):
                 validate_commit_sha(invalid)
+
+    def test_lists_branches_with_protection_and_sha(self):
+        self.client.session.get = Mock(
+            return_value=response(
+                200,
+                [
+                    {
+                        "name": "main",
+                        "protected": True,
+                        "commit": {"sha": "a" * 40},
+                    },
+                    {
+                        "name": "feature/mobile",
+                        "protected": False,
+                        "commit": {"sha": "b" * 40},
+                    },
+                ],
+            )
+        )
+        branches = self.client.list_branches(self.repo)
+        self.assertEqual([item.name for item in branches], ["main", "feature/mobile"])
+        self.assertTrue(branches[0].protected)
+        self.assertIn("per_page=100", self.client.session.get.call_args.args[0])
+
+    def test_branch_listing_paginates_until_short_page(self):
+        page_one = [
+            {"name": f"branch-{index}", "commit": {"sha": f"{index + 1:040x}"}}
+            for index in range(100)
+        ]
+        page_two = [{"name": "last", "commit": {"sha": "f" * 40}}]
+        self.client.session.get = Mock(
+            side_effect=[response(200, page_one), response(200, page_two)]
+        )
+        branches = self.client.list_branches(RepoRef("branch-pages", "repo"), limit=300)
+        self.assertEqual(len(branches), 101)
+        self.assertEqual(branches[-1].name, "last")
+        self.assertEqual(self.client.session.get.call_count, 2)
+
+    def test_branch_listing_never_fetches_more_than_three_pages(self):
+        pages = [
+            [
+                {"name": f"branch-{page}-{index}", "commit": {"sha": f"{page * 100 + index + 1:040x}"}}
+                for index in range(100)
+            ]
+            for page in range(3)
+        ]
+        self.client.session.get = Mock(side_effect=[response(200, page) for page in pages])
+        branches = self.client.list_branches(RepoRef("branch-ceiling", "repo"), limit=300)
+        self.assertEqual(len(branches), 300)
+        self.assertEqual(self.client.session.get.call_count, 3)
 
     def test_lists_commit_history(self):
         sha = "1" * 40
@@ -182,6 +243,86 @@ class GitHubVaultClientTests(unittest.TestCase):
             return_value=response(200, {"encoding": "base64", "content": "", "size": 0})
         )
         self.assertEqual(empty.blob_bytes(RepoRef("empty-owner", "empty-repo"), blob_sha, 1), b"")
+
+    def test_streams_complete_archive_with_hard_limit(self):
+        payload = zip_payload()
+        archive_response = response(200, None, {"Content-Length": str(len(payload))})
+        archive_response.iter_content.return_value = iter((payload[:1], payload[1:17], payload[17:]))
+        self.client.archive_session.get = Mock(return_value=archive_response)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "snapshot.zip"
+            written = self.client.download_archive_zip(
+                self.repo,
+                "5" * 40,
+                destination,
+                max_bytes=len(payload),
+            )
+            self.assertEqual(written, len(payload))
+            self.assertEqual(destination.read_bytes(), payload)
+        requested_url = self.client.archive_session.get.call_args.args[0]
+        self.assertTrue(requested_url.startswith("https://codeload.github.com/"))
+        self.assertNotIn("Authorization", self.client.archive_session.headers)
+
+    def test_complete_archive_rejects_empty_response(self):
+        archive_response = response(200, None)
+        archive_response.iter_content.return_value = iter(())
+        self.client.archive_session.get = Mock(return_value=archive_response)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "snapshot.zip"
+            with self.assertRaisesRegex(GitHubError, "empty"):
+                self.client.download_archive_zip(
+                    self.repo,
+                    "7" * 40,
+                    destination,
+                    max_bytes=5,
+                )
+            self.assertFalse(destination.exists())
+
+    def test_complete_archive_rejects_incomplete_zip_structure(self):
+        archive_response = response(200, None)
+        archive_response.iter_content.return_value = iter((b"PK-truncated",))
+        self.client.archive_session.get = Mock(return_value=archive_response)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "snapshot.zip"
+            with self.assertRaisesRegex(GitHubError, "structure"):
+                self.client.download_archive_zip(
+                    self.repo,
+                    "8" * 40,
+                    destination,
+                    max_bytes=100,
+                )
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.with_suffix(".zip.part").exists())
+
+    def test_complete_archive_rejects_redirects(self):
+        archive_response = response(302, None, {"Location": "https://example.com/archive.zip"})
+        self.client.archive_session.get = Mock(return_value=archive_response)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "snapshot.zip"
+            with self.assertRaisesRegex(GitHubError, "redirect"):
+                self.client.download_archive_zip(
+                    self.repo,
+                    "9" * 40,
+                    destination,
+                    max_bytes=100,
+                )
+            self.assertFalse(destination.exists())
+
+    def test_complete_archive_removes_partial_file_on_overflow(self):
+        archive_response = response(200, None)
+        archive_response.iter_content.return_value = iter((b"PK12", b"5678"))
+        self.client.archive_session.get = Mock(return_value=archive_response)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "snapshot.zip"
+            with self.assertRaisesRegex(GitHubError, "limit"):
+                self.client.download_archive_zip(
+                    self.repo,
+                    "6" * 40,
+                    destination,
+                    max_bytes=5,
+                )
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.with_suffix(".zip.part").exists())
 
 
 if __name__ == "__main__":

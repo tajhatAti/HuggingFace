@@ -31,7 +31,7 @@ Paths, names, metadata, source bytes, binary files, release names/assets, workfl
 
 ### GitHub
 
-GitHub is the sole repository data provider and an external dependency. API output is mapped into bounded records. Redirects are rejected. Large source archives, release assets, and protected artifact downloads remain on official GitHub pages.
+GitHub is the sole repository data provider and an external dependency. API output is mapped into bounded records. Redirects are rejected. Complete source ZIPs come only from GitHub's fixed codeload host; release assets and protected artifact downloads remain on official GitHub pages.
 
 ### Probabilistic model
 
@@ -43,7 +43,7 @@ AI output can be wrong, incomplete, insecure, or malformed. It is a suggestion a
 
 **Threat:** Input causes the Space to request an internal/arbitrary host or relay arbitrary large data.
 
-**Controls:** Full-match GitHub parser, fixed API root, encoded path/query values, redirect rejection, no visitor URL fetch, no generic download endpoint, bounded blob reads, and first-party links for full archives/releases/Actions.
+**Controls:** Full-match GitHub parser, fixed API and codeload roots, encoded path/query values, redirect rejection, no visitor URL fetch, no generic download endpoint, bounded blob/archive reads, ZIP-signature and central-directory validation, and repository-scoped first-party release/Actions links.
 
 ### Private-repository confused deputy
 
@@ -73,7 +73,7 @@ AI output can be wrong, incomplete, insecure, or malformed. It is a suggestion a
 
 **Threat:** A public repository accidentally contains active credentials that RepoVault previews, packages, logs, caches, or sends to the model.
 
-**Controls:** Common secret/key filenames and extensions are listed but not previewed or included in selected ZIPs. Large blob bytes are not globally cached. Logs contain no source bytes. The AI path applies stronger path exclusion and pre/post secret redaction. Full GitHub archives are clearly identified as direct, uninspected first-party downloads.
+**Controls:** Common secret/key filenames and extensions are listed but not previewed or included in selected ZIPs. Large blob bytes are not globally cached. Logs contain no source bytes. The AI path applies stronger path exclusion and pre/post secret redaction. Complete codeload archives are clearly identified as uninspected first-party snapshots and remain byte/storage bounded.
 
 These controls are defense in depth, not a guarantee. Repository owners must revoke committed credentials and remove them from history.
 
@@ -93,7 +93,7 @@ These controls are defense in depth, not a guarantee. Repository owners must rev
 
 **Threat:** Huge trees/files, many selected blobs, compression, repeated API calls, excessive sessions, or AI queue use exhausts resources.
 
-**Controls:** 20,000-file tree ceiling; 500/1,000 display bounds; 25 MB individual file; 20-file/50 MB selected ZIP; bounded commit/release/run/artifact lists; shrinking per-ZIP byte budget; TTL/LRU metadata cache; queue limit; expiring files; and bounded ZeroGPU duration. Full repositories/releases are not proxied.
+**Controls:** 300-branch and 20,000-file ceilings; 160-card/500-row pages; 25 MB individual file; 20-file/50 MB selected ZIP; 500 MB complete ZIP; 2 GB temporary-storage budget; bounded commit/release/run/artifact lists; TTL/LRU metadata cache; queue limit; expiring files; and bounded ZeroGPU duration. Release binaries are not proxied.
 
 ### Actions authentication bypass
 
@@ -125,7 +125,7 @@ These controls are defense in depth, not a guarantee. Repository owners must rev
 ## Residual risks
 
 - Novel credential filenames may evade sensitive-path checks.
-- Direct GitHub archives can contain accidentally committed credentials because RepoVault does not inspect them.
+- Complete codeload archives can contain accidentally committed credentials because RepoVault validates transport/size/signature but does not inspect or extract their contents.
 - Public repositories/assets can contain unlawful, malicious, copyrighted, or personal material.
 - A visitor can choose to run a downloaded file elsewhere; the Space cannot secure that external environment.
 - GitHub API/URL behavior can change.

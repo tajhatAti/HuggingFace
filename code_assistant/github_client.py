@@ -10,7 +10,9 @@ from __future__ import annotations
 import base64
 import os
 import re
+import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
@@ -73,6 +75,13 @@ class CompareSnapshot:
     behind_by: int
     total_commits: int
     files: tuple[ChangeRecord, ...]
+
+
+@dataclass(frozen=True)
+class BranchRecord:
+    name: str
+    sha: str
+    protected: bool = False
 
 
 @dataclass(frozen=True)
@@ -238,7 +247,13 @@ class GitHubClient:
             respect_retry_after_header=True,
             raise_on_status=False,
         )
-        self.session.mount("https://api.github.com/", HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=8))
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=8)
+        self.session.mount("https://api.github.com/", adapter)
+        # Archive traffic intentionally has no Authorization header. Complete
+        # snapshots come from a fixed first-party codeload host and are streamed.
+        self.archive_session = requests.Session()
+        self.archive_session.headers.update({"User-Agent": "taj-github-repovault/4.0"})
+        self.archive_session.mount("https://codeload.github.com/", adapter)
         self.last_rate_limit = RateLimitInfo(None, None, None)
 
     @staticmethod
@@ -412,6 +427,55 @@ class GitHubClient:
         )
         _PUBLIC_CACHE.set(key, comparison, ttl_seconds=300)
         return comparison
+
+    def list_branches(
+        self,
+        repo: RepoRef,
+        *,
+        limit: int = 300,
+    ) -> tuple[BranchRecord, ...]:
+        """List up to 300 public branches in stable API order."""
+
+        bounded_limit = max(1, min(int(limit), 300))
+        cache_key = ("branches", repo.owner.casefold(), repo.repo.casefold(), str(bounded_limit))
+        cached = _PUBLIC_CACHE.get(cache_key)
+        if isinstance(cached, tuple) and all(isinstance(item, BranchRecord) for item in cached):
+            return cached
+
+        records: list[BranchRecord] = []
+        page = 1
+        while len(records) < bounded_limit and page <= 3:
+            page_size = min(100, bounded_limit - len(records))
+            data = self._json(
+                f"{self.API_ROOT}/repos/{repo.owner}/{repo.repo}/branches?"
+                f"per_page={page_size}&page={page}"
+            )
+            if not isinstance(data, list):
+                raise GitHubError("GitHub branch list invalid response দিয়েছে।")
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "")[:200]
+                commit = item.get("commit") if isinstance(item.get("commit"), dict) else {}
+                sha = str(commit.get("sha") or "")
+                if not name or not _COMMIT_SHA_RE.fullmatch(sha):
+                    continue
+                records.append(
+                    BranchRecord(
+                        name=name,
+                        sha=sha,
+                        protected=bool(item.get("protected", False)),
+                    )
+                )
+                if len(records) >= bounded_limit:
+                    break
+            if len(data) < page_size:
+                break
+            page += 1
+
+        result = tuple(records)
+        _PUBLIC_CACHE.set(cache_key, result, ttl_seconds=300)
+        return result
 
     def list_commits(
         self,
@@ -700,6 +764,74 @@ class GitHubClient:
         if len(raw) > max_bytes:
             raise GitHubError(f"File download limit {max_bytes:,} bytes অতিক্রম করেছে।")
         return raw
+
+    def download_archive_zip(
+        self,
+        repo: RepoRef,
+        commit_sha: str,
+        destination: str | Path,
+        *,
+        max_bytes: int,
+    ) -> int:
+        """Stream one immutable public source ZIP from GitHub's fixed codeload host."""
+
+        sha = validate_commit_sha(commit_sha)
+        if max_bytes < 1 or max_bytes > 1_000_000_000:
+            raise ValueError("max_bytes must be between 1 and 1000000000")
+        output = Path(destination)
+        part = output.with_suffix(f"{output.suffix}.part")
+        url = f"https://codeload.github.com/{repo.owner}/{repo.repo}/zip/{sha}"
+        written = 0
+        response: requests.Response | None = None
+        try:
+            response = self.archive_session.get(
+                url,
+                timeout=(5, 120),
+                allow_redirects=False,
+                stream=True,
+            )
+            if 300 <= response.status_code < 400:
+                raise GitHubError("GitHub archive unexpected redirect দিয়েছে।")
+            if response.status_code == 404:
+                raise GitHubError("এই repository snapshot archive পাওয়া যায়নি।")
+            if response.status_code >= 400:
+                raise GitHubError(f"GitHub archive error ({response.status_code})।")
+            try:
+                declared = int(response.headers.get("Content-Length") or 0)
+            except (TypeError, ValueError):
+                declared = 0
+            if declared > max_bytes:
+                raise GitHubError(f"Complete ZIP limit {max_bytes:,} bytes অতিক্রম করেছে।")
+            prefix = bytearray()
+            with part.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if not chunk:
+                        continue
+                    if written == 0:
+                        prefix.extend(chunk)
+                        if len(prefix) < 2:
+                            continue
+                        if not prefix.startswith(b"PK"):
+                            raise GitHubError("GitHub archive ZIP signature invalid।")
+                        chunk = bytes(prefix)
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise GitHubError(f"Complete ZIP limit {max_bytes:,} bytes অতিক্রম করেছে।")
+                    handle.write(chunk)
+            if not prefix:
+                raise GitHubError("GitHub archive empty response দিয়েছে।")
+            if written == 0 or not zipfile.is_zipfile(part):
+                raise GitHubError("GitHub archive ZIP structure invalid বা incomplete।")
+            part.replace(output)
+        except requests.Timeout as exc:
+            raise GitHubError("GitHub archive download timeout হয়েছে।") from exc
+        except requests.RequestException as exc:
+            raise GitHubError("GitHub archive download করা যায়নি।") from exc
+        finally:
+            if response is not None:
+                response.close()
+            part.unlink(missing_ok=True)
+        return written
 
     def text_file(self, repo: RepoRef, branch: str, path: str, max_bytes: int) -> str:
         """Read one bounded UTF-8-ish file through the GitHub Contents API."""

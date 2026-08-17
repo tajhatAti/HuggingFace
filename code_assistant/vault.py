@@ -2,8 +2,8 @@
 
 RepoVault intentionally handles public GitHub data only. It never clones a
 repository, executes its content, accepts visitor credentials, or proxies an
-arbitrary host. Full archives and Actions artifact downloads stay on GitHub;
-selected-file bundles are assembled from exact Git blob IDs with hard limits.
+arbitrary host. Complete snapshots are streamed only from GitHub's fixed
+codeload host; selected bundles use exact Git blob IDs with hard limits.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from urllib.parse import quote, urlparse
 from .domain import RepositoryFile
 from .github_client import (
     ArtifactRecord,
+    BranchRecord,
     CommitDetail,
     CommitRecord,
     GitHubClient,
@@ -42,6 +43,9 @@ MAX_SELECTED_FILES = 20
 MAX_SINGLE_DOWNLOAD_BYTES = 25_000_000
 MAX_SELECTED_ZIP_BYTES = 50_000_000
 MAX_PREVIEW_BYTES = 300_000
+MAX_COMPLETE_ZIP_BYTES = 500_000_000
+MAX_VAULT_TEMP_BYTES = 2_000_000_000
+FILE_GALLERY_PAGE_SIZE = 160
 VAULT_ROOT = Path(os.getenv("VAULT_DIRECTORY", "/tmp/taj-repovault"))
 VAULT_TTL_SECONDS = 2 * 60 * 60
 MAX_VAULT_OUTPUTS = 120
@@ -61,6 +65,13 @@ SENSITIVE_NAMES = {
 }
 SENSITIVE_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".jks", ".keystore")
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+@dataclass(frozen=True)
+class RepositoryDiscovery:
+    repo: RepoRef
+    metadata: RepoMetadata
+    branches: tuple[BranchRecord, ...]
 
 
 @dataclass(frozen=True)
@@ -140,10 +151,19 @@ def _cleanup_outputs() -> None:
                 item.unlink(missing_ok=True)
         except OSError:
             continue
-    remaining = sorted((item for item in files if item.exists()), key=lambda item: item.stat().st_mtime, reverse=True)
-    for item in remaining[MAX_VAULT_OUTPUTS:]:
+    remaining = sorted(
+        (item for item in files if item.exists()),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    retained_bytes = 0
+    for index, item in enumerate(remaining):
         try:
-            item.unlink(missing_ok=True)
+            size = item.stat().st_size
+            if index >= MAX_VAULT_OUTPUTS or retained_bytes + size > MAX_VAULT_TEMP_BYTES:
+                item.unlink(missing_ok=True)
+            else:
+                retained_bytes += size
         except OSError:
             pass
 
@@ -183,16 +203,91 @@ def archive_urls(session: VaultSession) -> tuple[str, str]:
 
 
 def archive_links_markdown(session: VaultSession) -> str:
-    zip_url, tar_url = archive_urls(session)
-    return f"""## Download complete snapshot
+    return f"""## Complete snapshot · one tap
 
-The archive is generated and served directly by GitHub for immutable commit `{session.exact_ref[:12]}`.
+RepoVault will stream the immutable commit **`{session.exact_ref[:12]}`** into private temporary storage and return the ZIP directly on this website.
 
-- [⬇️ Download all files as ZIP]({zip_url})
-- [⬇️ Download all files as TAR.GZ]({tar_url})
-- [🔗 Open repository tree](https://github.com/{session.repo.owner}/{session.repo.repo}/tree/{session.exact_ref})
+**Limit:** {format_bytes(MAX_COMPLETE_ZIP_BYTES)} compressed · **Retention:** 2 hours · no extraction or execution.
 
-> Full archives may include sensitive files already committed to the public repository. RepoVault does not copy or inspect the archive.
+> A complete public source archive can contain sensitive material already committed by its owner. Review the repository before downloading.
+"""
+
+
+def download_complete_zip(
+    session: VaultSession,
+    *,
+    client: GitHubClient | None = None,
+) -> tuple[str, str]:
+    client = client or GitHubClient()
+    _cleanup_outputs()
+    safe_repo = SAFE_FILENAME_RE.sub("-", session.repo.full_name).strip("-") or "repository"
+    destination = _ensure_root() / (
+        f"{safe_repo}-{session.exact_ref[:12]}-complete-{uuid.uuid4().hex[:8]}.zip"
+    )
+    try:
+        written = client.download_archive_zip(
+            session.repo,
+            session.exact_ref,
+            destination,
+            max_bytes=MAX_COMPLETE_ZIP_BYTES,
+        )
+        destination.chmod(0o600)
+        _cleanup_outputs()
+        if not destination.exists():
+            raise GitHubError("Temporary storage budget archive-টি retain করতে পারেনি।")
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return (
+        str(destination),
+        f"✅ Complete snapshot ready · {format_bytes(written)} · commit `{session.exact_ref[:12]}`",
+    )
+
+
+def discover_repository(
+    repo_value: str,
+    *,
+    client: GitHubClient | None = None,
+) -> RepositoryDiscovery:
+    """Validate one public repository and enumerate its selectable branches."""
+
+    client = client or GitHubClient()
+    repo = parse_github_repo(repo_value)
+    metadata = client.metadata(repo)
+    if metadata.private:
+        raise ValueError("এই public RepoVault private repository পড়ে না।")
+    branches = client.list_branches(repo, limit=300)
+    if not branches:
+        raise ValueError("Repository-তে selectable branch পাওয়া যায়নি।")
+    return RepositoryDiscovery(repo=repo, metadata=metadata, branches=branches)
+
+
+def branch_choices(discovery: RepositoryDiscovery) -> list[tuple[str, str]]:
+    ordered = sorted(
+        discovery.branches,
+        key=lambda item: (item.name != discovery.metadata.default_branch, item.name.casefold()),
+    )
+    return [
+        (
+            (
+                f"{'★ ' if item.name == discovery.metadata.default_branch else ''}{item.name}"
+                f"{' · protected' if item.protected else ''} · {item.sha[:8]}"
+            ),
+            item.name,
+        )
+        for item in ordered
+    ]
+
+
+def discovery_markdown(discovery: RepositoryDiscovery) -> str:
+    protected = sum(1 for item in discovery.branches if item.protected)
+    capped = " (first 300 shown)" if len(discovery.branches) == 300 else ""
+    return f"""### Step 2 · Choose a branch
+
+**{_markdown_text(discovery.metadata.full_name)}** is public and ready.<br>
+Found **{len(discovery.branches)} branches{capped}** · **{protected} protected** · default **`{_markdown_text(discovery.metadata.default_branch)}`**.
+
+Choose the branch below, then launch the immutable workspace.
 """
 
 
@@ -272,6 +367,148 @@ def matching_file_paths(session: VaultSession, query: str = "") -> list[str]:
     ]
     paths.sort(key=lambda path: (len(PurePosixPath(path).parts), path.casefold()))
     return paths
+
+
+FILE_CATEGORIES = (
+    "All files",
+    "Apps & packages",
+    "Source code",
+    "Archives",
+    "Images & media",
+    "Documentation",
+    "Tests",
+    "Config & CI",
+    "Data",
+    "Other",
+)
+PACKAGE_SUFFIXES = {
+    ".apk",
+    ".aab",
+    ".ipa",
+    ".appimage",
+    ".deb",
+    ".rpm",
+    ".exe",
+    ".msi",
+    ".dmg",
+    ".jar",
+    ".war",
+}
+ARCHIVE_SUFFIXES = {".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar"}
+MEDIA_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".mp3", ".wav", ".mp4"}
+DOC_SUFFIXES = {".md", ".mdx", ".rst", ".txt", ".adoc", ".pdf"}
+DATA_SUFFIXES = {".json", ".jsonl", ".csv", ".tsv", ".xml", ".parquet", ".db", ".sqlite"}
+CONFIG_NAMES = {
+    "dockerfile",
+    "makefile",
+    "package.json",
+    "pyproject.toml",
+    "cargo.toml",
+    "go.mod",
+    "composer.json",
+    "gemfile",
+    "pubspec.yaml",
+}
+CATEGORY_ICONS = {
+    "Apps & packages": "📱",
+    "Source code": "⌘",
+    "Archives": "🗜️",
+    "Images & media": "◈",
+    "Documentation": "▤",
+    "Tests": "✓",
+    "Config & CI": "⚙",
+    "Data": "▦",
+    "Other": "◇",
+}
+
+
+def file_category(path: str) -> str:
+    pure = PurePosixPath(path)
+    name = pure.name.casefold()
+    suffix = pure.suffix.casefold()
+    lowered = path.casefold()
+    if suffix in PACKAGE_SUFFIXES:
+        return "Apps & packages"
+    if suffix in ARCHIVE_SUFFIXES:
+        return "Archives"
+    if suffix in MEDIA_SUFFIXES:
+        return "Images & media"
+    if suffix in DOC_SUFFIXES or name.startswith(("readme", "license")):
+        return "Documentation"
+    if "test" in name or any(part.casefold() in {"test", "tests", "spec", "specs"} for part in pure.parts):
+        return "Tests"
+    if (
+        name in CONFIG_NAMES
+        or ".github/workflows/" in lowered
+        or suffix in {".toml", ".yaml", ".yml", ".ini", ".cfg", ".conf"}
+    ):
+        return "Config & CI"
+    if suffix in DATA_SUFFIXES:
+        return "Data"
+    if detect_language(path) != "Other":
+        return "Source code"
+    return "Other"
+
+
+def gallery_file_choices(
+    session: VaultSession,
+    query: str = "",
+    category: str = "All files",
+    page: int = 1,
+) -> list[tuple[str, str]]:
+    if category not in FILE_CATEGORIES:
+        category = "All files"
+    paths = matching_file_paths(session, query)
+    if category != "All files":
+        paths = [path for path in paths if file_category(path) == category]
+    priority = {name: index for index, name in enumerate(FILE_CATEGORIES[1:])}
+    paths.sort(key=lambda path: (priority[file_category(path)], path.casefold()))
+    bounded_page = max(1, min(int(page), MAX_VAULT_TREE_FILES))
+    start = (bounded_page - 1) * FILE_GALLERY_PAGE_SIZE
+    file_map = session.file_map()
+    return [
+        (
+            f"{CATEGORY_ICONS[file_category(path)]} {path} · {format_bytes(file_map[path].size)}",
+            path,
+        )
+        for path in paths[start : start + FILE_GALLERY_PAGE_SIZE]
+    ]
+
+
+def gallery_status(session: VaultSession, query: str, category: str, page: int) -> str:
+    paths = matching_file_paths(session, query)
+    if category in FILE_CATEGORIES and category != "All files":
+        paths = [path for path in paths if file_category(path) == category]
+    bounded_page = max(1, min(int(page), MAX_VAULT_TREE_FILES))
+    start = (bounded_page - 1) * FILE_GALLERY_PAGE_SIZE
+    end = min(start + FILE_GALLERY_PAGE_SIZE, len(paths))
+    pages = max(1, (len(paths) + FILE_GALLERY_PAGE_SIZE - 1) // FILE_GALLERY_PAGE_SIZE)
+    if start >= len(paths):
+        return f"No cards on page {bounded_page} · {len(paths):,} files match"
+    return f"Cards {start + 1:,}–{end:,} of {len(paths):,} · page {bounded_page}/{pages}"
+
+
+def snapshot_insights(session: VaultSession) -> str:
+    counts = {category: 0 for category in FILE_CATEGORIES[1:]}
+    for item in session.files:
+        counts[file_category(item.path)] += 1
+    largest = sorted(session.files, key=lambda item: item.size, reverse=True)[:5]
+    category_line = " · ".join(
+        f"**{CATEGORY_ICONS[name]} {name}:** {counts[name]:,}"
+        for name in FILE_CATEGORIES[1:]
+        if counts[name]
+    )
+    largest_lines = "\n".join(f"- `{_markdown_text(item.path)}` · {format_bytes(item.size)}" for item in largest)
+    return f"""### Smart snapshot map
+
+{category_line or 'No files classified.'}
+
+<details><summary><strong>Largest files in this snapshot</strong></summary>
+
+{largest_lines or '- None'}
+
+</details>
+"""
 
 
 def filter_files(session: VaultSession, query: str = "", limit: int = MAX_VISIBLE_FILES) -> list[str]:
@@ -386,11 +623,7 @@ def render_commit_detail(detail: CommitDetail, session: VaultSession) -> str:
             f"{'✅ verified signature' if detail.commit.verified else 'signature not verified'}"
         ),
         "",
-        (
-            f"[Open commit on GitHub]({detail.commit.html_url}) · "
-            f"[Download this commit ZIP](https://github.com/{session.repo.owner}/{session.repo.repo}/archive/"
-            f"{detail.commit.sha}.zip)"
-        ),
+        "Use **Open snapshot**, then **Download everything** to receive this commit inside RepoVault.",
         "",
         f"**{len(detail.files)} changed files** · +{detail.additions:,} / -{detail.deletions:,} · {detail.total_changes:,} total",
         "",
@@ -447,7 +680,15 @@ def render_releases(session: VaultSession) -> str:
         if not release.assets:
             lines.append("- No attached assets")
             continue
-        for asset in release.assets:
+        ordered_assets = sorted(
+            release.assets,
+            key=lambda asset: (
+                PurePosixPath(asset.name).suffix.casefold() not in {".apk", ".aab"},
+                PurePosixPath(asset.name).suffix.casefold() not in {".zip", ".gz", ".tar"},
+                asset.name.casefold(),
+            ),
+        )
+        for asset in ordered_assets:
             url = _trusted_release_url(session, asset.download_url)
             name = _markdown_text(asset.name)
             suffix = PurePosixPath(asset.name).suffix.casefold()
@@ -523,8 +764,7 @@ def inspect_file(
             markdown=(
                 f"## `{_markdown_text(path)}`\n\n"
                 "🔒 RepoVault potential credential/key file proxy বা preview করে না। "
-                f"[GitHub-এ file দেখুন](https://github.com/{session.repo.owner}/{session.repo.repo}/blob/"
-                f"{session.exact_ref}/{quote(path, safe='/')})."
+                "Complete snapshot download ব্যবহার করার আগে repository owner-এর content review করুন।"
             ),
             content="",
             download_path=None,
@@ -534,8 +774,8 @@ def inspect_file(
         return FilePreview(
             path=path,
             markdown=(
-                f"## `{_markdown_text(path)}`\n\nSize: **{format_bytes(item.size)}** · RepoVault proxy limit "
-                f"{format_bytes(MAX_SINGLE_DOWNLOAD_BYTES)}। [Open raw file on GitHub]({raw_url})"
+                f"## `{_markdown_text(path)}`\n\nSize: **{format_bytes(item.size)}** · individual proxy limit "
+                f"{format_bytes(MAX_SINGLE_DOWNLOAD_BYTES)}। Complete snapshot ZIP ব্যবহার করুন।"
             ),
             content="",
             download_path=None,
@@ -551,6 +791,9 @@ def inspect_file(
         destination.chmod(0o600)
     except OSError:
         pass
+    _cleanup_outputs()
+    if not destination.exists():
+        raise GitHubError("Temporary storage budget file-টি retain করতে পারেনি।")
 
     sample = raw[:MAX_PREVIEW_BYTES]
     mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
@@ -572,7 +815,7 @@ def inspect_file(
 
 **{format_bytes(len(raw))}** · `{_markdown_text(mime)}` · {language} · blob `{item.sha[:12]}`
 
-{preview_note} [Open immutable raw file on GitHub]({raw_url})
+{preview_note} Download button থেকে এই exact blob নিন।
 """
     return FilePreview(path, markdown, content, str(destination), raw_url)
 
@@ -642,4 +885,7 @@ def build_selected_zip(
         destination.chmod(0o600)
     except OSError:
         pass
+    _cleanup_outputs()
+    if not destination.exists():
+        raise GitHubError("Temporary storage budget selected ZIP-টি retain করতে পারেনি।")
     return str(destination), f"✅ {len(selected)} files · {format_bytes(written)} · commit `{session.exact_ref[:12]}`"

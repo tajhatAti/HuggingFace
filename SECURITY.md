@@ -29,8 +29,9 @@ The public product will preserve:
 - no visitor credential collection or owner-token proxying of protected GitHub content;
 - no repository write/commit/push/workflow authority;
 - immutable commit/blob identity for proxied files and selected ZIPs;
-- repository-scoped official links for full archives, releases, and Actions;
-- bounded trees, lists, files, selected ZIPs, prompts, outputs, caches, queues, and artifacts;
+- fixed-host, commit-pinned, size/signature/integrity-validated streaming for complete source ZIPs;
+- repository-scoped official links for releases and Actions;
+- bounded branches, trees, card pages, files, selected/complete ZIPs, temporary storage, prompts, outputs, caches, queues, and artifacts;
 - credential/key path blocking in RepoVault and pre/post secret redaction in AI review;
 - explicit untrusted-source prompt boundaries;
 - transparent distinction between metadata, heuristics, and confirmed facts.
