@@ -19,9 +19,10 @@ For each Smart Lyrics request it:
 1. calls `/lookup_lyrics` with title, artist, and duration;
 2. immediately returns a strict synchronized LRCLIB match when available;
 3. otherwise uploads the selected audio through `/gradio_api/upload`;
-4. calls `/transcribe_song` and waits for its server-sent completion event;
-5. validates that the structured result is successful and contains parseable LRC;
-6. returns it through the existing `OnDeviceAiLyricsManager` listener/state contract, allowing the player and editor to adopt the result without architectural regressions.
+4. calls `/transcribe_song`; the server previews three regions, detects language, identifies title/artist and searches again before any full-song pass;
+5. forces Bengali decoding after automatic `bn` detection, preventing avoidable Banglish output;
+6. validates that the structured result is successful and contains parseable LRC;
+7. returns it through the existing `OnDeviceAiLyricsManager` listener/state contract, allowing the player and editor to adopt the result without architectural regressions.
 
 The legacy manager class name and some result enum names are intentionally retained for source compatibility. The implementation does not decode audio, download model weights, load native Whisper, or run local AI. Known pasted lyrics can still be aligned to server-provided timing using a small deterministic Kotlin text/timing algorithm.
 

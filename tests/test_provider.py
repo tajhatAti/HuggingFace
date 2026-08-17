@@ -83,6 +83,35 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaisesRegex(LyricsProviderError, "redirect"):
             client.search_text("a useful lyric phrase")
 
+    def test_ai_words_can_discover_a_strict_title_artist_hint(self):
+        response = FakeResponse(
+            payload={
+                "response": {
+                    "sections": [
+                        {
+                            "hits": [
+                                {
+                                    "matched_words": 7,
+                                    "nb_exact_words": 6,
+                                    "result": {
+                                        "title": "আমার সোনার বাংলা",
+                                        "primary_artist_names": "রবীন্দ্রনাথ ঠাকুর",
+                                    },
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+        session = FakeSession(response)
+        identities = LrcLibClient(session=session).search_identities(
+            "আমার সোনার বাংলা আমি তোমায় ভালোবাসি"
+        )
+        self.assertEqual(identities[0].title, "আমার সোনার বাংলা")
+        self.assertEqual(identities[0].artist, "রবীন্দ্রনাথ ঠাকুর")
+        self.assertEqual(session.last_call[0], "https://genius.com/api/search/lyric")
+
     def test_metadata_selection_checks_title_artist_duration_and_script(self):
         good = candidate()
         wrong_duration = candidate(record_id=2, duration_seconds=260.0)

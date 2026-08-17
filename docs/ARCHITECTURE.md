@@ -13,11 +13,13 @@ Android app or minimal Space UI
     │
     └── bounded audio upload
             ├── stream-decode to bounded 16 kHz mono PCM, validate <= 8 minutes
-            ├── metadata lookup (skip transcription when trustworthy)
-            ├── multilingual int8 Faster-Whisper on the 16 GB CPU
-            ├── up to two recognized-phrase LRCLIB searches
-            ├── strict word/script/duration validation
-            └── provider LRC or AI-timed LRC + JSON + download
+            ├── verify supplied metadata online
+            ├── AI preview from three short vocal regions
+            ├── detect language; force bn for native বাংলা output
+            ├── identify title/artist from preview evidence
+            ├── strict LRCLIB synchronized search
+            ├── full-song CPU AI only after the search misses
+            └── second verified search or AI-timed LRC + metadata + JSON
 ```
 
 ## Components
@@ -32,7 +34,7 @@ Android app or minimal Space UI
 
 ## Why quota-free Faster-Whisper small
 
-`Systran/faster-whisper-small` runs through CTranslate2 int8 on the Space's free CPU. It trades some accuracy and speed for predictable personal availability: no daily ZeroGPU allowance can block the website or Android app. All available CPU threads are used, one transcription runs at a time, Bengali remains supported, and retrieval-first matching still avoids inference whenever trustworthy synchronized lyrics exist.
+`Systran/faster-whisper-small` runs through CTranslate2 int8 on the Space's free CPU. It trades some accuracy and speed for predictable personal availability: no daily ZeroGPU allowance can block the website or Android app. All available CPU threads are used, one transcription runs at a time, and RAM holds the model/audio safely but does not replace CPU compute. A short preview detects Bengali and identifies the song before full listening; native bn is then forced to prevent Banglish output.
 
 ## Lyr compatibility
 

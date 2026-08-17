@@ -17,6 +17,8 @@ LANGUAGE_CODES = {
     "Hindi": "hi",
     "Urdu": "ur",
 }
+PREVIEW_CLIP_SECONDS = 8
+PREVIEW_START_FRACTIONS = (0.16, 0.46, 0.74)
 
 
 class WhisperRecognizer:
@@ -81,10 +83,60 @@ class WhisperRecognizer:
 
 
 class CpuWhisperRecognizer:
-    """CTranslate2 int8 Whisper adapter for reliable quota-free CPU inference."""
+    """CTranslate2 int8 Whisper adapter for staged quota-free CPU inference."""
 
     def __init__(self, model: Any) -> None:
         self.model = model
+
+    def preview(
+        self,
+        samples: np.ndarray,
+        sample_rate: int,
+        duration_seconds: float,
+        language_label: str,
+    ) -> tuple[str, str, float]:
+        """Listen to three short vocal regions to infer language and identity words."""
+
+        if sample_rate != 16_000:
+            raise RecognitionError("CPU Whisper requires 16 kHz audio.")
+        clip_samples = min(samples.size, PREVIEW_CLIP_SECONDS * sample_rate)
+        max_start = max(0, samples.size - clip_samples)
+        starts = sorted(
+            {
+                int(max_start * fraction)
+                for fraction in PREVIEW_START_FRACTIONS
+            }
+        )
+        clips = [samples[start : start + clip_samples] for start in starts]
+        silence = np.zeros(sample_rate // 4, dtype=np.float32)
+        preview_parts: list[np.ndarray] = []
+        for index, clip in enumerate(clips):
+            if index:
+                preview_parts.append(silence)
+            preview_parts.append(clip)
+        preview_audio = np.concatenate(preview_parts) if preview_parts else samples
+        forced_language = LANGUAGE_CODES.get(language_label)
+        try:
+            generated, info = self.model.transcribe(
+                preview_audio,
+                language=forced_language,
+                task="transcribe",
+                beam_size=1,
+                best_of=1,
+                condition_on_previous_text=False,
+                vad_filter=False,
+                word_timestamps=False,
+            )
+            text = normalize_text(
+                " ".join(str(item.text or "") for item in generated)
+            )
+            language = forced_language or str(getattr(info, "language", "auto"))
+            probability = float(getattr(info, "language_probability", 0.0) or 0.0)
+        except Exception as exc:
+            raise RecognitionError(
+                f"AI preview could not inspect this audio: {type(exc).__name__}"
+            ) from exc
+        return text, language, max(0.0, min(1.0, probability))
 
     def transcribe(
         self,

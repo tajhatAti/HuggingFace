@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -17,8 +18,23 @@ import androidx.core.content.ContextCompat
  */
 class OnDeviceAiService : Service(), OnDeviceAiLyricsManager.Listener {
 
+    private var processingWakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
+        processingWakeLock = try {
+            (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "$packageName:onlineLyrics"
+                )
+                .apply {
+                    setReferenceCounted(false)
+                    acquire(MAX_WAKE_LOCK_MS)
+                }
+        } catch (_: RuntimeException) {
+            null
+        }
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(OnDeviceAiLyricsManager.currentState()))
         OnDeviceAiLyricsManager.addListener(this)
@@ -44,6 +60,10 @@ class OnDeviceAiService : Service(), OnDeviceAiLyricsManager.Listener {
 
     override fun onDestroy() {
         OnDeviceAiLyricsManager.removeListener(this)
+        processingWakeLock?.let { wakeLock ->
+            if (wakeLock.isHeld) wakeLock.release()
+        }
+        processingWakeLock = null
         super.onDestroy()
     }
 
@@ -111,6 +131,7 @@ class OnDeviceAiService : Service(), OnDeviceAiLyricsManager.Listener {
         private const val ACTION_CANCEL = "com.ahad.lyricsoverlay.ai.CANCEL"
         private const val CHANNEL_ID = "on_device_lyrics"
         private const val NOTIFICATION_ID = 4110
+        private const val MAX_WAKE_LOCK_MS = 20L * 60L * 1_000L
 
         fun ensureRunning(context: Context) {
             val intent = Intent(context, OnDeviceAiService::class.java).setAction(ACTION_MONITOR)

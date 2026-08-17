@@ -16,6 +16,16 @@ from .lyrics import comparison_text, contains_bengali, normalize_text
 LRCLIB_ROOT = "https://lrclib.net/api"
 MAX_RESULTS = 20
 MAX_LYRICS_CHARACTERS = 250_000
+MAX_IDENTITIES = 5
+GENIUS_SEARCH_URL = "https://genius.com/api/search/lyric"
+
+
+@dataclass(frozen=True)
+class SongIdentity:
+    title: str
+    artist: str
+    matched_words: int
+    exact_words: int
 
 
 @dataclass(frozen=True)
@@ -54,7 +64,9 @@ class LrcLibClient:
             respect_retry_after_header=True,
             raise_on_status=False,
         )
-        self.session.mount("https://lrclib.net/", HTTPAdapter(max_retries=retry))
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://lrclib.net/", adapter)
+        self.session.mount("https://genius.com/", adapter)
 
     def _get(self, path: str, params: dict[str, str]) -> list[dict[str, Any]]:
         response: requests.Response | None = None
@@ -147,6 +159,58 @@ class LrcLibClient:
             self._candidate(item) for item in self._get("search", {"q": clean})
         ]
         return tuple(candidate for candidate in candidates if candidate is not None)
+
+    def search_identities(self, query: str) -> tuple[SongIdentity, ...]:
+        """Use recognized words only to discover a title/artist hint from Genius."""
+
+        clean = normalize_text(query)[:500]
+        if len(comparison_text(clean).split()) < 4:
+            return ()
+        response: requests.Response | None = None
+        try:
+            response = self.session.get(
+                GENIUS_SEARCH_URL,
+                params={"q": clean, "per_page": str(MAX_IDENTITIES)},
+                timeout=(4, 12),
+                allow_redirects=False,
+            )
+            if response.status_code != 200:
+                return ()
+            sections = response.json().get("response", {}).get("sections", [])
+            found: dict[tuple[str, str], SongIdentity] = {}
+            for section in sections[:8]:
+                for hit in section.get("hits", [])[:MAX_IDENTITIES]:
+                    matched = int(hit.get("matched_words") or 0)
+                    exact = int(hit.get("nb_exact_words") or 0)
+                    if matched < 4 or exact < 3 or exact / max(1, matched) < 0.70:
+                        continue
+                    result = hit.get("result") or {}
+                    title = normalize_text(str(result.get("title") or ""))[:300]
+                    artist = normalize_text(
+                        str(
+                            result.get("primary_artist_names")
+                            or (result.get("primary_artist") or {}).get("name")
+                            or ""
+                        )
+                    )[:300]
+                    if not title or not artist:
+                        continue
+                    key = (title.casefold(), artist.casefold())
+                    identity = SongIdentity(title, artist, matched, exact)
+                    previous = found.get(key)
+                    if previous is None or identity.exact_words > previous.exact_words:
+                        found[key] = identity
+            return tuple(
+                sorted(
+                    found.values(),
+                    key=lambda item: (-item.exact_words, -item.matched_words),
+                )[:MAX_IDENTITIES]
+            )
+        except (requests.RequestException, TypeError, ValueError, AttributeError):
+            return ()
+        finally:
+            if response is not None:
+                response.close()
 
 
 def _name_similarity(left: str, right: str) -> float:

@@ -8,7 +8,7 @@ Lyr Online processes user-selected audio into lyrics. It does not execute upload
 
 - Uploads are capped at 16 GB and eight minutes, then FFmpeg decodes directly to bounded 16 kHz mono PCM so source-rate audio cannot exhaust RAM.
 - Decoding produces mono PCM in memory; uploads are never executed.
-- LRCLIB is the only application-controlled external API host.
+- Application-controlled lookup hosts are fixed to LRCLIB plus Genius' public lyric-search API, used only for strict title/artist hints from AI-recognized words.
 - HTTP redirects from the provider are rejected.
 - Provider lists and lyric text lengths are bounded.
 - Quota-free CPU transcription has concurrency, queue, upload, decode-time, and song-duration ceilings.

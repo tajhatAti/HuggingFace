@@ -18,12 +18,13 @@ A minimal online song-to-synced-lyrics backend and mobile web interface for the 
 
 The former GitHub repository explorer has been removed. This Space now does one job:
 
-1. accept one song;
-2. prefer a strict synchronized LRCLIB result when title/artist metadata identifies it safely;
-3. otherwise listen with multilingual int8 Faster-Whisper on the 16 GB CPU;
-4. use recognized lyric evidence for one final strict synchronized lookup;
-5. fall back to an editable AI-generated LRC with explicit cue endings;
-6. return plain lyrics, synchronized LRC, structured app data, and a downloadable `.lrc` file.
+1. accept one song and verify its supplied title/artist online;
+2. run one short AI preview assembled from three vocal regions;
+3. detect the language first and force বাংলা script when Bengali is detected;
+4. use preview words to identify title/artist and search synchronized lyrics;
+5. listen to the full song only when the identity search has no trustworthy match;
+6. repeat the synchronized search with richer evidence, otherwise return editable AI LRC;
+7. return identified metadata, plain lyrics, synchronized LRC, structured data and download.
 
 ## Reviewed Lyr branches
 
@@ -74,7 +75,7 @@ The Android client should call lookup first and upload audio only when lookup ha
 | LRC output retention | 2 hours / 80 files |
 | GPU quota required | No |
 
-Audio is decoded ephemerally through bounded 16 kHz mono FFmpeg output and is not published. Large source files stay on ephemeral disk instead of expanding at their original sample rate in RAM. Generated LRC files receive randomized names and expire. Singing transcription is inherently less reliable than speech recognition; accompaniment, reverb, language, and vocal clarity affect accuracy.
+RAM is capacity rather than compute speed; all available CPU threads perform staged int8 inference. Audio is decoded ephemerally through bounded 16 kHz mono FFmpeg output and is not published. Large source files stay on ephemeral disk instead of expanding at their original sample rate in RAM. Generated LRC files receive randomized names and expire. Singing transcription is inherently less reliable than speech recognition; accompaniment, reverb, language, and vocal clarity affect accuracy.
 
 ## Local tests
 

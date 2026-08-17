@@ -16,6 +16,7 @@ from .provider import (
     LrcLibCandidate,
     LrcLibClient,
     LyricsProviderError,
+    SongIdentity,
     choose_metadata_candidate,
     choose_transcript_candidate,
     transcript_phrases,
@@ -34,6 +35,14 @@ class Recognizer(Protocol):
 
 class LyricsServiceError(RuntimeError):
     pass
+
+
+_LANGUAGE_LABEL_BY_CODE = {
+    "bn": "বাংলা",
+    "en": "English",
+    "hi": "Hindi",
+    "ur": "Urdu",
+}
 
 
 def _provider_document(
@@ -65,6 +74,59 @@ def _provider_document(
         confidence=round(confidence, 4),
         warnings=warnings,
     )
+
+
+def _search_from_ai_evidence(
+    provider: Any,
+    *,
+    transcript: str,
+    duration_seconds: float,
+    bengali_expected: bool,
+    warnings: list[str],
+) -> tuple[LrcLibCandidate | None, float, SongIdentity | None]:
+    """Identify title/artist from AI words, then require a verified synchronized match."""
+
+    candidates: dict[int, LrcLibCandidate] = {}
+    identities: dict[tuple[str, str], SongIdentity] = {}
+    for phrase in transcript_phrases(transcript):
+        try:
+            for candidate in provider.search_text(phrase):
+                candidates[candidate.record_id] = candidate
+            identity_search = getattr(provider, "search_identities", None)
+            if callable(identity_search):
+                for identity in identity_search(phrase):
+                    key = (identity.title.casefold(), identity.artist.casefold())
+                    previous = identities.get(key)
+                    if previous is None or identity.exact_words > previous.exact_words:
+                        identities[key] = identity
+        except LyricsProviderError as exc:
+            warnings.append(str(exc))
+            break
+
+    ranked_identities = sorted(
+        identities.values(),
+        key=lambda item: (-item.exact_words, -item.matched_words),
+    )
+    for identity in ranked_identities[:3]:
+        try:
+            for candidate in provider.search_metadata(
+                identity.title,
+                identity.artist,
+                duration_seconds,
+            ):
+                candidates[candidate.record_id] = candidate
+        except LyricsProviderError as exc:
+            warnings.append(str(exc))
+            break
+
+    match, confidence = choose_transcript_candidate(
+        tuple(candidates.values()),
+        transcript=transcript,
+        duration_seconds=duration_seconds,
+        bengali_expected=bengali_expected,
+    )
+    best_identity = ranked_identities[0] if ranked_identities else None
+    return match, confidence, best_identity
 
 
 class LyricsService:
@@ -112,6 +174,8 @@ class LyricsService:
         language_label: str = "Auto detect",
     ) -> LyricsDocument:
         warnings: list[str] = []
+
+        # Step 1: trust useful MediaStore metadata only after strict provider verification.
         if title.strip():
             try:
                 candidates = self.provider.search_metadata(
@@ -133,7 +197,7 @@ class LyricsService:
                         confidence=confidence,
                         language=language,
                         warnings=(
-                            "Exact online synchronized lyrics were used; AI transcription was not needed.",
+                            "Verified title/artist online; full AI listening was not needed.",
                         ),
                     )
             except LyricsProviderError as exc:
@@ -143,37 +207,101 @@ class LyricsService:
             raise LyricsServiceError(
                 "AI listening is temporarily unavailable; instant title lookup still works."
             )
+
+        # Step 2: AI listens to three short regions first. This detects Bengali before full
+        # transcription and supplies words for title/artist identification and online lookup.
+        preview_text = ""
+        detected_language = "auto"
+        preview_probability = 0.0
+        preview_method = getattr(self.recognizer, "preview", None)
+        if callable(preview_method):
+            try:
+                preview_text, detected_language, preview_probability = preview_method(
+                    audio.samples,
+                    audio.sample_rate,
+                    audio.duration_seconds,
+                    language_label,
+                )
+            except RecognitionError as exc:
+                warnings.append(str(exc))
+
+        bengali_expected = (
+            language_label == "বাংলা"
+            or detected_language == "bn"
+            or contains_bengali(f"{title} {artist} {preview_text}")
+        )
+        if detected_language and detected_language != "auto":
+            probability_text = (
+                f" ({preview_probability:.0%} confidence)"
+                if preview_probability > 0
+                else ""
+            )
+            warnings.append(
+                f"AI preview detected {detected_language}{probability_text} before lookup."
+            )
+
+        identified: SongIdentity | None = None
+        if preview_text:
+            match, confidence, identified = _search_from_ai_evidence(
+                self.provider,
+                transcript=preview_text,
+                duration_seconds=audio.duration_seconds,
+                bengali_expected=bengali_expected,
+                warnings=warnings,
+            )
+            if identified is not None:
+                warnings.append(
+                    f"AI identified a likely song: {identified.title} — {identified.artist}."
+                )
+            if match is not None:
+                language = "bn" if contains_bengali(match.synced_lyrics) else detected_language
+                return _provider_document(
+                    match,
+                    source="lrclib_audio_match",
+                    confidence=confidence,
+                    language=language,
+                    warnings=tuple(dict.fromkeys(warnings)),
+                )
+
+        # Step 3: only a failed identity/synchronized search pays for full-song listening.
+        effective_language_label = language_label
+        if language_label == "Auto detect":
+            effective_language_label = _LANGUAGE_LABEL_BY_CODE.get(
+                detected_language,
+                "Auto detect",
+            )
         try:
-            transcript, segments, detected_language = self.recognizer.transcribe(
+            transcript, segments, full_detected_language = self.recognizer.transcribe(
                 audio.samples,
                 audio.sample_rate,
                 audio.duration_seconds,
-                language_label,
+                effective_language_label,
             )
         except RecognitionError as exc:
             raise LyricsServiceError(str(exc)) from exc
 
-        bengali_expected = language_label == "বাংলা" or contains_bengali(
-            f"{title} {artist} {transcript}"
+        detected_language = (
+            "bn" if bengali_expected else full_detected_language or detected_language
         )
-        provider_candidates: dict[int, LrcLibCandidate] = {}
-        for phrase in transcript_phrases(transcript):
-            try:
-                for candidate in self.provider.search_text(phrase):
-                    provider_candidates[candidate.record_id] = candidate
-            except LyricsProviderError as exc:
-                warnings.append(str(exc))
-                break
-        match, confidence = choose_transcript_candidate(
-            tuple(provider_candidates.values()),
+        bengali_expected = bengali_expected or detected_language == "bn" or contains_bengali(
+            transcript
+        )
+
+        # Step 4: richer full-song evidence gets one final identity and synced-lyrics search.
+        match, confidence, full_identity = _search_from_ai_evidence(
+            self.provider,
             transcript=transcript,
             duration_seconds=audio.duration_seconds,
             bengali_expected=bengali_expected,
+            warnings=warnings,
         )
-        if match is not None:
-            language = (
-                "bn" if contains_bengali(match.synced_lyrics) else detected_language
+        if full_identity is not None:
+            identified = full_identity
+            warnings.append(
+                f"Full-song AI identified: {identified.title} — {identified.artist}."
             )
+        if match is not None:
+            language = "bn" if contains_bengali(match.synced_lyrics) else detected_language
             return _provider_document(
                 match,
                 source="lrclib_audio_match",
@@ -187,8 +315,16 @@ class LyricsService:
             raise LyricsServiceError(
                 "AI heard text but could not create usable lyric timing."
             )
-        resolved_title = title.strip() or audio.original_name.rsplit(".", 1)[0]
-        resolved_artist = artist.strip() or "Unknown artist"
+        resolved_title = (
+            identified.title
+            if identified is not None
+            else title.strip() or audio.original_name.rsplit(".", 1)[0]
+        )
+        resolved_artist = (
+            identified.artist
+            if identified is not None
+            else artist.strip() or "Unknown artist"
+        )
         synced = serialize_lrc(lines, title=resolved_title, artist=resolved_artist)
         return LyricsDocument(
             source="whisper_ai",
@@ -204,7 +340,7 @@ class LyricsService:
                 dict.fromkeys(
                     warnings
                     + [
-                        "No trustworthy community match was found; this is an AI transcription of the recording.",
+                        "No trustworthy synchronized community match was found; full-song AI timing was used.",
                         "Singing, accompaniment, reverb, and pronunciation can reduce transcription accuracy.",
                     ]
                 )

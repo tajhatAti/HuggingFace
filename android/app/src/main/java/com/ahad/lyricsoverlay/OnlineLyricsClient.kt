@@ -54,10 +54,10 @@ class OnlineLyricsClient(
         onProgress(18, "No trustworthy match found; uploading the song securely…")
         val uploadedPath = uploadAudio(audioUri, displayName, onProgress)
         ensureActive()
-        onProgress(62, "Quota-free CPU Whisper is listening on Hugging Face…")
+        onProgress(62, "AI is detecting language, title, artist, and an online match…")
         val eventId = createPrediction(uploadedPath, title, artist, forceBengali)
         ensureActive()
-        onProgress(78, "Building synchronized lyric timing…")
+        onProgress(78, "Using full-song AI only if the synchronized search misses…")
         return awaitPrediction(eventId, "transcribe_song")
     }
 

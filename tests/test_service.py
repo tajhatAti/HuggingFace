@@ -8,7 +8,9 @@ from lyr_service.service import LyricsService, LyricsServiceError
 
 
 def candidate(
-    title="Song", plain="these are enough recognized lyric words for matching"
+    title="Song",
+    plain="these are enough recognized lyric words for matching",
+    synced="[00:01.00] these are enough recognized lyric words\n[00:05.00] for matching",
 ):
     return LrcLibCandidate(
         record_id=8,
@@ -17,7 +19,7 @@ def candidate(
         album="Album",
         duration_seconds=60.0,
         plain_lyrics=plain,
-        synced_lyrics="[00:01.00] these are enough recognized lyric words\n[00:05.00] for matching",
+        synced_lyrics=synced,
     )
 
 
@@ -42,10 +44,12 @@ class FakeProvider:
 class FakeRecognizer:
     def __init__(self):
         self.calls = 0
+        self.language_labels = []
 
     def transcribe(self, samples, sample_rate, duration_seconds, language_label):
-        del samples, sample_rate, duration_seconds, language_label
+        del samples, sample_rate, duration_seconds
         self.calls += 1
+        self.language_labels.append(language_label)
         return (
             "these are enough recognized lyric words for matching in this song",
             (
@@ -54,6 +58,12 @@ class FakeRecognizer:
             ),
             "en",
         )
+
+
+class PreviewRecognizer(FakeRecognizer):
+    def preview(self, samples, sample_rate, duration_seconds, language_label):
+        del samples, sample_rate, duration_seconds, language_label
+        return "আমার সোনার বাংলা আমি তোমায় ভালোবাসি প্রতিদিন", "bn", 0.94
 
 
 class ServiceTests(unittest.TestCase):
@@ -79,6 +89,33 @@ class ServiceTests(unittest.TestCase):
         ).transcribe(self.audio)
         self.assertEqual(result.source, "lrclib_audio_match")
         self.assertGreater(provider.text_calls, 0)
+
+    def test_ai_preview_finds_synced_result_before_full_song(self):
+        provider = FakeProvider(
+            text=(
+                candidate(
+                    title="আমার সোনার বাংলা",
+                    plain="আমার সোনার বাংলা আমি তোমায় ভালোবাসি প্রতিদিন",
+                    synced="[00:01.00] আমার সোনার বাংলা\n[00:05.00] আমি তোমায় ভালোবাসি প্রতিদিন",
+                ),
+            )
+        )
+        recognizer = PreviewRecognizer()
+        result = LyricsService(provider=provider, recognizer=recognizer).transcribe(
+            self.audio
+        )
+        self.assertEqual(result.source, "lrclib_audio_match")
+        self.assertEqual(result.language, "bn")
+        self.assertEqual(recognizer.calls, 0)
+
+    def test_bengali_preview_forces_native_script_full_transcription(self):
+        recognizer = PreviewRecognizer()
+        result = LyricsService(
+            provider=FakeProvider(), recognizer=recognizer
+        ).transcribe(self.audio)
+        self.assertEqual(result.source, "whisper_ai")
+        self.assertEqual(result.language, "bn")
+        self.assertEqual(recognizer.language_labels, ["বাংলা"])
 
     def test_whisper_fallback_returns_lyr_compatible_lrc(self):
         result = LyricsService(

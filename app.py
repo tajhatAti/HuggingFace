@@ -198,7 +198,7 @@ with gr.Blocks(title="Lyr Online", analytics_enabled=False) as demo:
     gr.HTML(
         """<section id="hero"><div class="kicker">Online song → synced lyrics</div>
 <h1>Lyr Online.</h1>
-<p>Upload one song. Lyr first checks for a trustworthy synchronized match, then listens with Whisper only when needed. বাংলা, English এবং multilingual audio supported.</p></section>"""
+<p>Upload one song. Lyr verifies metadata, uses an AI preview to detect language and identify title/artist, searches synchronized lyrics, then listens to the full song only when every online match fails. বাংলা script is forced after Bengali detection.</p></section>"""
     )
     with gr.Column(elem_id="work"):
         gr.Markdown("### 1 · Choose a song")

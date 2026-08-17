@@ -240,12 +240,12 @@
     <string name="ai_smart_privacy_short">Online path: secure upload → synchronized search → Hugging Face Whisper only if needed. No AI model is downloaded.</string>
     <string name="ai_step_online">Search online by song details</string>
     <string name="ai_step_prepare">Upload audio securely</string>
-    <string name="ai_step_listen">Process on Hugging Face</string>
-    <string name="ai_step_retry">Build synchronized timings</string>
-    <string name="ai_step_finish">Validate and return LRC</string>
+    <string name="ai_step_listen">AI detect language and identity</string>
+    <string name="ai_step_retry">Search online using AI evidence</string>
+    <string name="ai_step_finish">Full-song AI only if still needed</string>
     <string name="ai_searching_metadata_status">Searching for synchronized lyrics by title and artist…</string>
-    <string name="ai_searching_recognized_status">Hugging Face is processing the audio and building timings…</string>
-    <string name="ai_finalizing_status">Validating synchronized timing and text…</string>
+    <string name="ai_searching_recognized_status">AI is detecting language, identifying the song, and searching synchronized lyrics…</string>
+    <string name="ai_finalizing_status">Validating native-script lyrics and synchronized timing…</string>
     <string name="ai_online_completed_status">Synchronized online lyrics found and ready to use.</string>
     <string name="ai_local_file_completed_status">A synchronized same-folder LRC was found and loaded.</string>
     <string name="ai_aligned_completed_status">Your exact pasted lyrics were aligned to online timing. Review before saving.</string>
