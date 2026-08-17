@@ -41,7 +41,7 @@ No step invokes a shell, Git client, archive extractor, compiler, package manage
 
 ### `app.py`
 
-Owns Gradio composition, event wiring, error boundaries, model lifecycle, and ZeroGPU-decorated inference. The repository-first interface has seven workspaces:
+Owns Gradio composition, event wiring, error boundaries, model lifecycle, and ZeroGPU-decorated inference. The repository-first interface has eight workspaces:
 
 1. Browse & select
 2. Download everything
@@ -49,7 +49,7 @@ Owns Gradio composition, event wiring, error boundaries, model lifecycle, and Ze
 4. Commit time travel
 5. Actions artifacts
 6. AI review
-7. 160+ feature catalog
+7. 161+ feature catalog
 8. Trust & limits
 
 A serial onboarding panel precedes the workspaces: repository validation → branch discovery/selection → immutable workspace launch. The primary explorer uses visible multi-select file cards rather than a single-file dropdown.

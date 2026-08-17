@@ -212,6 +212,7 @@ FEATURE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "Prompt-injection neutralization",
             "Static findings without GPU",
             "Qwen Coder ZeroGPU review",
+            "Graceful ZeroGPU registration fallback",
             "Review refinement",
             "Markdown export",
             "Validated patch export",

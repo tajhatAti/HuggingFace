@@ -16,7 +16,7 @@ models:
 
 A production-oriented, mobile-first **3D glass repository command center** for public GitHub repositories. The interface now follows a serial flow: connect a repository, discover/select its branches, open an immutable snapshot, tap visible file cards, then preview or download without navigating a wall of dropdowns.
 
-RepoVault includes **160 auditable capabilities** across branch discovery, smart file groups, APK/release access, website-hosted complete ZIPs, commit time travel, Actions metadata, security controls, accessibility, and the preserved Qwen AI reviewer.
+RepoVault includes **161 auditable capabilities** across branch discovery, smart file groups, APK/release access, website-hosted complete ZIPs, commit time travel, Actions metadata, security controls, accessibility, and the preserved Qwen AI reviewer.
 
 ## Product capabilities
 

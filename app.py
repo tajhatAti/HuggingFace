@@ -69,6 +69,7 @@ MAX_NEW_TOKENS = max(256, min(int(os.getenv("MAX_NEW_TOKENS", "1200")), 2_000))
 MODEL = None
 TOKENIZER = None
 MODEL_ERROR = ""
+ZERO_GPU_ERROR = ""
 # ZeroGPU emulates CUDA during module initialization, then attaches a real GPU
 # inside @spaces.GPU. Root-level placement enables its optimized transfer path.
 DEVICE = torch.device("cuda")
@@ -90,6 +91,24 @@ except Exception as exc:  # noqa: BLE001 - external model stacks raise heterogen
     MODEL_ERROR = f"{type(exc).__name__}: {exc}"
     log.error("Model loading failed: %s", MODEL_ERROR)
     log.debug(traceback.format_exc())
+
+
+def _zero_gpu_or_fallback(*, duration: int):
+    """Keep read-only repository tools online if ZeroGPU registration is unavailable."""
+
+    def decorate(function):
+        global ZERO_GPU_ERROR
+        if ZERO_GPU_ERROR:
+            return function
+        try:
+            return spaces.GPU(duration=duration)(function)
+        except Exception as exc:  # noqa: BLE001 - ZeroGPU control-plane failures are heterogeneous.
+            ZERO_GPU_ERROR = f"{type(exc).__name__}: {exc}"
+            log.error("ZeroGPU registration failed; AI generation disabled: %s", ZERO_GPU_ERROR)
+            log.debug(traceback.format_exc())
+            return function
+
+    return decorate
 
 
 def _error_outputs(message: str):
@@ -157,6 +176,13 @@ def inspect_repository_ui(
 
 
 def _model_generate(prompt: str) -> str:
+    if ZERO_GPU_ERROR:
+        return (
+            "## AI generation temporarily unavailable\n\n"
+            "RepoVault and deterministic repository intelligence remain online while the ZeroGPU control plane "
+            "recovers. Try the AI review again later.\n\n"
+            f"Owner diagnostic: `{sanitize_model_output(ZERO_GPU_ERROR, 500)}`"
+        )
     if MODEL is None or TOKENIZER is None:
         return (
             "## Model unavailable\n\n"
@@ -197,7 +223,7 @@ def _model_generate(prompt: str) -> str:
     return sanitize_model_output(answer) or "## AI review\n\nModel কোনো response দেয়নি। Request আরও নির্দিষ্ট করে চেষ্টা করুন।"
 
 
-@spaces.GPU(duration=55)
+@_zero_gpu_or_fallback(duration=55)
 def generate_review(prepared: PreparedAnalysis | None) -> str:
     """Generate one professional report inside the bounded ZeroGPU allocation."""
 
@@ -257,7 +283,7 @@ def build_refinement_ui(
     return prompt, "⏳ Existing snapshot ব্যবহার করে review refine হচ্ছে…"
 
 
-@spaces.GPU(duration=55)
+@_zero_gpu_or_fallback(duration=55)
 def generate_refined_review(prompt: str) -> str:
     if not prompt:
         return "## Refinement unavailable\n\nValid follow-up request দিন।"
@@ -666,9 +692,13 @@ HEADER = f"""
 """
 
 MODEL_STATUS = (
-    f"Model ready: {MODEL_ID}"
-    if MODEL is not None
-    else "AI model unavailable; every repository and download feature still works."
+    "ZeroGPU registration is temporarily unavailable; static review and every RepoVault feature still work."
+    if ZERO_GPU_ERROR
+    else (
+        f"Model ready: {MODEL_ID}"
+        if MODEL is not None
+        else "AI model unavailable; every repository and download feature still works."
+    )
 )
 
 empty_overview, empty_evidence, empty_findings, empty_architecture, empty_dependencies = render_empty_state()

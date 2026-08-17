@@ -61,9 +61,9 @@ The managed Gradio runtime and Transformers must agree on `huggingface_hub`. Cur
 - Avoid pinning managed Gradio, Torch, Spaces, or `huggingface_hub` in `requirements.txt`.
 - Keep application dependencies bounded to supported major versions.
 
-### Runtime: model unavailable
+### Runtime: model or ZeroGPU registration unavailable
 
-The deterministic tabs should remain usable. Check container logs for model download, architecture, dtype, or CUDA emulation errors. Keep model placement at module initialization for ZeroGPU's optimized transfer path.
+The deterministic tabs and all RepoVault downloads should remain usable. Check container logs for model download, architecture, dtype, CUDA emulation, or ZeroGPU control-plane errors. Model placement remains at module initialization for ZeroGPU's optimized transfer path. If ZeroGPU task registration times out, the guarded decorators disable only model generation instead of crashing the entire repository product; restart or rebuild after the control plane recovers.
 
 ### Runtime: GitHub rate limit
 
