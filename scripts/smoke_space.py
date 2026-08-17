@@ -175,7 +175,8 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
     ):
         raise SmokeTestError(
             "Online identity refill did not recover Amar Sonar Bangla and its artist: "
-            f"title={title!r}, artist={artist!r}."
+            f"title={title!r}, artist={artist!r}, "
+            f"warnings={structured.get('warnings')!r}."
         )
     bengali_characters = sum(
         "\u0980" <= character <= "\u09ff" for character in lrc

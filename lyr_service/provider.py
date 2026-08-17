@@ -165,7 +165,8 @@ class LrcLibClient:
         """Use recognized words only to discover a title/artist hint from Genius."""
 
         clean = normalize_text(query)[:500]
-        if len(comparison_text(clean).split()) < 4:
+        query_word_count = len(comparison_text(clean).split())
+        if query_word_count < 3:
             return ()
         response: requests.Response | None = None
         try:
@@ -183,7 +184,12 @@ class LrcLibClient:
                 for hit in section.get("hits", [])[:MAX_IDENTITIES]:
                     matched = int(hit.get("matched_words") or 0)
                     exact = int(hit.get("nb_exact_words") or 0)
-                    if matched < 4 or exact < 3 or exact / max(1, matched) < 0.70:
+                    required_matches = 3 if query_word_count == 3 else 4
+                    if (
+                        matched < required_matches
+                        or exact < 3
+                        or exact / max(1, matched) < 0.70
+                    ):
                         continue
                     result = hit.get("result") or {}
                     title = normalize_text(str(result.get("title") or ""))[:300]
