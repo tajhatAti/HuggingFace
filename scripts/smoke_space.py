@@ -156,8 +156,17 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
     if structured.get("language") != "bn" or not any(
         "\u0980" <= character <= "\u09ff" for character in lrc
     ):
+        diagnostics = {
+            "language": structured.get("language"),
+            "source": structured.get("source"),
+            "title": structured.get("title"),
+            "artist": structured.get("artist"),
+            "warnings": structured.get("warnings"),
+            "lrc_excerpt": lrc[:240],
+        }
         raise SmokeTestError(
-            "Auto detection did not return native Bengali-script synchronized lyrics."
+            "Auto detection did not return native Bengali-script synchronized lyrics: "
+            f"{json.dumps(diagnostics, ensure_ascii=False)}"
         )
     result = {
         "revision": revision,
