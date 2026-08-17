@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from lyr_service.domain import AudioData, TimedSegment
-from lyr_service.provider import LrcLibCandidate
+from lyr_service.provider import LrcLibCandidate, SongIdentity
 from lyr_service.service import LyricsService, LyricsServiceError
 
 
@@ -39,6 +39,12 @@ class FakeProvider:
         del phrase
         self.text_calls += 1
         return self.text
+
+
+class FilenameProvider(FakeProvider):
+    def search_title_identities(self, query):
+        self.filename_query = query
+        return (SongIdentity("Amar Sonar Bangla", "Rabindranath Tagore", 3, 3),)
 
 
 class FakeRecognizer:
@@ -116,6 +122,15 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result.source, "whisper_ai")
         self.assertEqual(result.language, "bn")
         self.assertEqual(recognizer.language_labels, ["বাংলা"])
+
+    def test_online_verified_filename_refills_fallback_identity(self):
+        provider = FilenameProvider()
+        recognizer = PreviewRecognizer()
+        audio = AudioData(None, 16_000, 60.0, "amar-sonar-bangla-public-domain.ogg")
+        result = LyricsService(provider=provider, recognizer=recognizer).transcribe(audio)
+        self.assertEqual(provider.filename_query, "amar sonar bangla")
+        self.assertEqual(result.title, "Amar Sonar Bangla")
+        self.assertEqual(result.artist, "Rabindranath Tagore")
 
     def test_whisper_fallback_returns_lyr_compatible_lrc(self):
         result = LyricsService(

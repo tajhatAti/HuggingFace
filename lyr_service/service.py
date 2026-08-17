@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol
 
 from .domain import AudioData, LyricsDocument, RecognitionError, TimedSegment
@@ -43,6 +44,33 @@ _LANGUAGE_LABEL_BY_CODE = {
     "hi": "Hindi",
     "ur": "Urdu",
 }
+_FILENAME_NOISE = {
+    "audio",
+    "copy",
+    "download",
+    "file",
+    "music",
+    "official",
+    "public",
+    "domain",
+    "recording",
+    "track",
+    "upload",
+}
+
+
+def _filename_title_hint(original_name: str) -> str:
+    stem = (original_name or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    stem = stem.rsplit(".", 1)[0]
+    words = re.findall(r"[^\W_]+", stem.replace("_", " ").replace("-", " "), re.UNICODE)
+    useful = [
+        word
+        for word in words
+        if word.casefold() not in _FILENAME_NOISE
+        and not word.isdigit()
+        and not re.fullmatch(r"[0-9a-fA-F]{8,}", word)
+    ]
+    return " ".join(useful[:16]) if len(useful) >= 2 else ""
 
 
 def _provider_document(
@@ -262,6 +290,48 @@ class LyricsService:
                     language=language,
                     warnings=tuple(dict.fromkeys(warnings)),
                 )
+
+        # A descriptive local filename is only a hint: verify it online after the AI
+        # preview, then use the verified identity for one more synchronized search.
+        if identified is None:
+            filename_hint = _filename_title_hint(audio.original_name)
+            title_search = getattr(self.provider, "search_title_identities", None)
+            if filename_hint and callable(title_search):
+                try:
+                    filename_identities = title_search(filename_hint)
+                    if filename_identities:
+                        identified = filename_identities[0]
+                        warnings.append(
+                            "AI evidence was supplemented by an online-verified filename "
+                            f"identity: {identified.title} — {identified.artist}."
+                        )
+                        candidates = self.provider.search_metadata(
+                            identified.title,
+                            identified.artist,
+                            audio.duration_seconds,
+                        )
+                        match, confidence = choose_metadata_candidate(
+                            candidates,
+                            title=identified.title,
+                            artist=identified.artist,
+                            duration_seconds=audio.duration_seconds,
+                        )
+                        if (
+                            match is not None
+                            and bengali_expected
+                            and not contains_bengali(match.synced_lyrics)
+                        ):
+                            match = None
+                        if match is not None:
+                            return _provider_document(
+                                match,
+                                source="lrclib_audio_match",
+                                confidence=confidence,
+                                language=("bn" if bengali_expected else detected_language),
+                                warnings=tuple(dict.fromkeys(warnings)),
+                            )
+                except LyricsProviderError as exc:
+                    warnings.append(str(exc))
 
         # Step 3: only a failed identity/synchronized search pays for full-song listening.
         effective_language_label = language_label

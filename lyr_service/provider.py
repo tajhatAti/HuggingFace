@@ -18,6 +18,7 @@ MAX_RESULTS = 20
 MAX_LYRICS_CHARACTERS = 250_000
 MAX_IDENTITIES = 5
 GENIUS_SEARCH_URL = "https://genius.com/api/search/lyric"
+GENIUS_TITLE_SEARCH_URL = "https://genius.com/api/search/multi"
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,72 @@ class LrcLibClient:
                         continue
                     key = (title.casefold(), artist.casefold())
                     identity = SongIdentity(title, artist, matched, exact)
+                    previous = found.get(key)
+                    if previous is None or identity.exact_words > previous.exact_words:
+                        found[key] = identity
+            return tuple(
+                sorted(
+                    found.values(),
+                    key=lambda item: (-item.exact_words, -item.matched_words),
+                )[:MAX_IDENTITIES]
+            )
+        except (requests.RequestException, TypeError, ValueError, AttributeError):
+            return ()
+        finally:
+            if response is not None:
+                response.close()
+
+    def search_title_identities(self, query: str) -> tuple[SongIdentity, ...]:
+        """Verify a filename-derived title hint against Genius song results."""
+
+        clean = normalize_text(query)[:300]
+        query_words = set(comparison_text(clean).split())
+        if len(query_words) < 2:
+            return ()
+        response: requests.Response | None = None
+        try:
+            response = self.session.get(
+                GENIUS_TITLE_SEARCH_URL,
+                params={"q": clean, "per_page": str(MAX_IDENTITIES)},
+                timeout=(4, 12),
+                allow_redirects=False,
+            )
+            if response.status_code != 200:
+                return ()
+            sections = response.json().get("response", {}).get("sections", [])
+            found: dict[tuple[str, str], SongIdentity] = {}
+            for section in sections[:4]:
+                if section.get("type") not in {"top_hit", "song"}:
+                    continue
+                for hit in section.get("hits", [])[:MAX_IDENTITIES]:
+                    if hit.get("type") != "song":
+                        continue
+                    result = hit.get("result") or {}
+                    title = normalize_text(str(result.get("title") or ""))[:300]
+                    artist = normalize_text(
+                        str(
+                            result.get("primary_artist_names")
+                            or (result.get("primary_artist") or {}).get("name")
+                            or ""
+                        )
+                    )[:300]
+                    title_words = set(comparison_text(title).split())
+                    exact = len(query_words & title_words)
+                    similarity = _name_similarity(clean, title)
+                    if (
+                        not title
+                        or not artist
+                        or exact < 2
+                        or similarity < 0.68
+                    ):
+                        continue
+                    key = (title.casefold(), artist.casefold())
+                    identity = SongIdentity(
+                        title=title,
+                        artist=artist,
+                        matched_words=max(exact, int(hit.get("matched_words") or 0)),
+                        exact_words=exact,
+                    )
                     previous = found.get(key)
                     if previous is None or identity.exact_words > previous.exact_words:
                         found[key] = identity

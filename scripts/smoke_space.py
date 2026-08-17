@@ -168,6 +168,15 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
             "Auto detection did not return native Bengali-script synchronized lyrics: "
             f"{json.dumps(diagnostics, ensure_ascii=False)}"
         )
+    title = str(structured.get("title") or "")
+    artist = str(structured.get("artist") or "")
+    if "amar sonar bangla" not in title.casefold() or artist.casefold().startswith(
+        "unknown"
+    ):
+        raise SmokeTestError(
+            "Online identity refill did not recover Amar Sonar Bangla and its artist: "
+            f"title={title!r}, artist={artist!r}."
+        )
     bengali_characters = sum(
         "\u0980" <= character <= "\u09ff" for character in lrc
     )

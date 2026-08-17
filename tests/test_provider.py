@@ -112,6 +112,36 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(identities[0].artist, "রবীন্দ্রনাথ ঠাকুর")
         self.assertEqual(session.last_call[0], "https://genius.com/api/search/lyric")
 
+    def test_filename_title_hint_must_match_a_genius_song_identity(self):
+        response = FakeResponse(
+            payload={
+                "response": {
+                    "sections": [
+                        {
+                            "type": "top_hit",
+                            "hits": [
+                                {
+                                    "type": "song",
+                                    "matched_words": 3,
+                                    "result": {
+                                        "title": "Amar Sonar Bangla",
+                                        "primary_artist_names": "Rabindranath Tagore",
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+        session = FakeSession(response)
+        identities = LrcLibClient(session=session).search_title_identities(
+            "amar sonar bangla"
+        )
+        self.assertEqual(identities[0].title, "Amar Sonar Bangla")
+        self.assertEqual(identities[0].artist, "Rabindranath Tagore")
+        self.assertEqual(session.last_call[0], "https://genius.com/api/search/multi")
+
     def test_metadata_selection_checks_title_artist_duration_and_script(self):
         good = candidate()
         wrong_duration = candidate(record_id=2, duration_seconds=260.0)
