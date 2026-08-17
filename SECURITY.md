@@ -6,7 +6,7 @@ Lyr Online processes user-selected audio into lyrics. It does not execute upload
 
 ## Controls
 
-- Audio is capped at 80 MB and eight minutes.
+- Uploads are capped at 16 GB and eight minutes, then FFmpeg decodes directly to bounded 16 kHz mono PCM so source-rate audio cannot exhaust RAM.
 - Decoding produces mono PCM in memory; uploads are never executed.
 - LRCLIB is the only application-controlled external API host.
 - HTTP redirects from the provider are rejected.

@@ -104,7 +104,7 @@ class OnlineLyricsClient(
         val mime = resolver.getType(uri) ?: "audio/*"
         val declaredSize = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
         if (declaredSize > MAX_UPLOAD_BYTES) {
-            throw IOException("This song is larger than 80 MB.")
+            throw IOException("This song is larger than the 16 GB upload ceiling.")
         }
         val connection = open("$SPACE_ROOT/gradio_api/upload", "POST", UPLOAD_TIMEOUT_MS).apply {
             doOutput = true
@@ -129,7 +129,7 @@ class OnlineLyricsClient(
                             if (count < 0) break
                             uploaded += count
                             if (uploaded > MAX_UPLOAD_BYTES) {
-                                throw IOException("This song is larger than 80 MB.")
+                                throw IOException("This song is larger than the 16 GB upload ceiling.")
                             }
                             output.write(buffer, 0, count)
                             if (declaredSize > 0L) {
@@ -290,7 +290,7 @@ class OnlineLyricsClient(
         const val SPACE_ROOT = "https://madarauchihagmailcom-my.hf.space"
         private const val USER_AGENT =
             "LyrMusic/3.0 (com.ahad.lyricsoverlay; https://github.com/tajhatAti/HuggingFace)"
-        private const val MAX_UPLOAD_BYTES = 80L * 1_000L * 1_000L
+        private const val MAX_UPLOAD_BYTES = 16L * 1_000L * 1_000L * 1_000L
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val UPLOAD_TIMEOUT_MS = 180_000
         private const val REQUEST_TIMEOUT_MS = 30_000

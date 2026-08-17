@@ -65,7 +65,7 @@ The Android client should call lookup first and upload audio only when lookup ha
 
 | Resource | Bound |
 |---|---:|
-| Audio size | 80 MB |
+| Audio size | 16 GB |
 | Audio duration | 8 minutes |
 | GPU queue concurrency | 1 |
 | Queue size | 8 |
@@ -74,7 +74,7 @@ The Android client should call lookup first and upload audio only when lookup ha
 | LRC output retention | 2 hours / 80 files |
 | ZeroGPU reservation | 90 seconds |
 
-Audio is decoded ephemerally and is not published. Generated LRC files receive randomized names and expire. Singing transcription is inherently less reliable than speech recognition; accompaniment, reverb, language, and vocal clarity affect accuracy.
+Audio is decoded ephemerally through bounded 16 kHz mono FFmpeg output and is not published. Large source files stay on ephemeral disk instead of expanding at their original sample rate in RAM. Generated LRC files receive randomized names and expire. Singing transcription is inherently less reliable than speech recognition; accompaniment, reverb, language, and vocal clarity affect accuracy.
 
 ## Local tests
 

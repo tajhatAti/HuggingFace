@@ -11,7 +11,7 @@ Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, 
 3. Load the page and verify the title is `Lyr Online`.
 4. Call `/lookup_lyrics` with a known song and verify a strict synchronized result or a clear no-match response.
 5. Upload a short public-domain speech/audio fixture and verify `whisper_ai` structured output and a valid `.lrc` download.
-6. Verify 80 MB and eight-minute rejections.
+6. Verify 16 GB and eight-minute rejections, plus bounded 16 kHz mono decoding.
 7. Verify no former RepoVault/GitHub explorer endpoint remains in `/gradio_api/info`.
 
 ## Troubleshooting

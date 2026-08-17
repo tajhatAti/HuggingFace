@@ -260,7 +260,7 @@ with gr.Blocks(title="Lyr Online", analytics_enabled=False) as demo:
                 precision=1,
             )
         gr.Markdown(
-            f"Online only · maximum **{MAX_AUDIO_SECONDS // 60} minutes / {MAX_AUDIO_BYTES // 1_000_000} MB** · audio is processed ephemerally · {MODEL_STATUS}"
+            f"Online only · maximum **{MAX_AUDIO_SECONDS // 60} minutes / {MAX_AUDIO_BYTES // 1_000_000_000} GB** · large files are decoded memory-safely · audio is processed ephemerally · {MODEL_STATUS}"
         )
         with gr.Row():
             extract_button = gr.Button("2 · Extract synced lyrics", elem_id="extract")
@@ -298,6 +298,7 @@ demo.queue(default_concurrency_limit=1, max_size=8)
 if __name__ == "__main__":
     demo.launch(
         show_error=False,
+        max_file_size=MAX_AUDIO_BYTES,
         theme=gr.themes.Base(primary_hue="violet", neutral_hue="slate"),
         css=CSS,
     )

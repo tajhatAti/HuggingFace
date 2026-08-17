@@ -12,7 +12,7 @@ Android app or minimal Space UI
     ├── title/artist/duration ──> strict LRCLIB selection ──> synced LRC
     │
     └── bounded audio upload
-            ├── decode to mono PCM, validate <= 8 minutes
+            ├── stream-decode to bounded 16 kHz mono PCM, validate <= 8 minutes
             ├── metadata lookup (skip GPU when trustworthy)
             ├── multilingual Whisper on ZeroGPU
             ├── up to two recognized-phrase LRCLIB searches
