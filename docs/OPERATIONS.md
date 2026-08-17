@@ -2,7 +2,7 @@
 
 ## Deploy
 
-Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, syncs the Space, selects free 16 GB CPU hardware, then uploads a public-domain WAV and requires successful synchronized LRC output.
+Push the fixed Arena branch. GitHub Actions runs unit tests and compile checks, syncs the Space, uses its free 16 GB host CPU, then uploads a public-domain WAV and requires successful synchronized LRC output.
 
 ## Verify
 

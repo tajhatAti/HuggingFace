@@ -88,7 +88,7 @@ python -m compileall -q app.py lyr_service scripts tests
 
 ## Deployment
 
-Every push to `arena/01a00b5b-huggingface` is validated and mirrored to `madarauchihagmailcom/My` by `.github/workflows/sync-to-huggingface.yml`. The workflow keeps the Space on free 16 GB CPU hardware and runs a real audio-to-LRC smoke test after syncing.
+Every push to `arena/01a00b5b-huggingface` is validated and mirrored to `madarauchihagmailcom/My` by `.github/workflows/sync-to-huggingface.yml`. The workflow preserves the Space registration, runs transcription on its free 16 GB host CPU, and requires a real audio-to-LRC smoke test after syncing.
 
 ## Security
 
