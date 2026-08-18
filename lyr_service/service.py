@@ -304,6 +304,7 @@ class LyricsService:
             )
 
         identified: SongIdentity | None = None
+        identified_by_fingerprint = False
         if preview_text:
             match, confidence, identified = _search_from_ai_evidence(
                 self.provider,
@@ -338,6 +339,7 @@ class LyricsService:
                 )
                 if fingerprinted is not None:
                     identified = fingerprinted
+                    identified_by_fingerprint = True
                     warnings.append(
                         "Audio fingerprint identified the recording online: "
                         f"{identified.title} — {identified.artist}."
@@ -400,9 +402,13 @@ class LyricsService:
                         filename_identities = lyric_search(filename_hint)
                 if filename_identities and (
                     identified is None
+                    or identified_by_fingerprint
                     or filename_identities[0].exact_words >= identified.exact_words
                 ):
+                    # A fingerprint can identify a cover, chant, or sampled recording.
+                    # Prefer a useful filename only after the catalog has verified it.
                     identified = filename_identities[0]
+                    identified_by_fingerprint = False
                     warnings.append(
                         "AI evidence was supplemented by an online-verified filename "
                         f"identity: {identified.title} — {identified.artist}."

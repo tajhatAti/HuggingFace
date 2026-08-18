@@ -102,6 +102,17 @@ class FakeIdentifier:
         return SongIdentity("Matir Roud", "Aftermath", 100, 100)
 
 
+class FalsePositiveIdentifier:
+    def identify(self, samples, sample_rate, duration_seconds):
+        del samples, sample_rate, duration_seconds
+        return SongIdentity(
+            "Bangladesh India National anthem",
+            "Sports Chants & Cricket Chants",
+            100,
+            100,
+        )
+
+
 class ServiceTests(unittest.TestCase):
     def setUp(self):
         self.audio = AudioData(None, 16_000, 60.0, "song.mp3")
@@ -184,7 +195,11 @@ class ServiceTests(unittest.TestCase):
         provider = FilenameProvider()
         recognizer = PreviewRecognizer()
         audio = AudioData(None, 16_000, 60.0, "amar-sonar-bangla-public-domain.ogg")
-        result = LyricsService(provider=provider, recognizer=recognizer).transcribe(audio)
+        result = LyricsService(
+            provider=provider,
+            recognizer=recognizer,
+            identifier=FalsePositiveIdentifier(),
+        ).transcribe(audio)
         self.assertEqual(provider.filename_query, "amar sonar bangla")
         self.assertEqual(result.title, "Amar Sonar Bangla")
         self.assertEqual(result.artist, "Rabindranath Tagore")
