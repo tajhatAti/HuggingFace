@@ -33,6 +33,7 @@ def wait_for_space(
     """Wait for the currently mirrored revision to become the running revision."""
 
     deadline = time.monotonic() + timeout_seconds
+    last_recovery = 0.0
     last = "unknown"
     while time.monotonic() < deadline:
         target_sha = api.repo_info(repo_id=repo_id, repo_type="space").sha
@@ -42,6 +43,17 @@ def wait_for_space(
         last = f"stage={runtime.stage}, target={target_sha}, running={running_sha}"
         if runtime.stage == "RUNNING" and running_sha == target_sha:
             return target_sha
+        now = time.monotonic()
+        if runtime.stage == "RUNTIME_ERROR" and now - last_recovery >= 60:
+            last_recovery = now
+            print(f"Space runtime failed; requesting a recovery restart ({last}).")
+            try:
+                api.restart_space(repo_id=repo_id)
+            except Exception as exc:
+                print(
+                    "Space recovery restart was rejected; waiting for the scheduler: "
+                    f"{type(exc).__name__}: {exc}"
+                )
         time.sleep(10)
     raise SmokeTestError(f"Space did not reach its mirrored revision: {last}")
 
