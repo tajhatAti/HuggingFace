@@ -19,6 +19,7 @@ MAX_LYRICS_CHARACTERS = 250_000
 MAX_IDENTITIES = 5
 GENIUS_SEARCH_URL = "https://genius.com/api/search/lyric"
 GENIUS_TITLE_SEARCH_URL = "https://genius.com/api/search/multi"
+MUSICBRAINZ_RECORDING_URL = "https://musicbrainz.org/ws/2/recording/"
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class LrcLibClient:
         adapter = HTTPAdapter(max_retries=retry)
         self.session.mount("https://lrclib.net/", adapter)
         self.session.mount("https://genius.com/", adapter)
+        self.session.mount("https://musicbrainz.org/", adapter)
 
     def _get(self, path: str, params: dict[str, str]) -> list[dict[str, Any]]:
         response: requests.Response | None = None
@@ -277,6 +279,68 @@ class LrcLibClient:
                 sorted(
                     found.values(),
                     key=lambda item: (-item.exact_words, -item.matched_words),
+                )[:MAX_IDENTITIES]
+            )
+        except (requests.RequestException, TypeError, ValueError, AttributeError):
+            return ()
+        finally:
+            if response is not None:
+                response.close()
+
+    def search_catalog_identities(self, query: str) -> tuple[SongIdentity, ...]:
+        """Verify a title hint against MusicBrainz when lyric search is unavailable."""
+
+        clean = normalize_text(query)[:300]
+        query_words = set(comparison_text(clean).split())
+        if len(query_words) < 2:
+            return ()
+        response: requests.Response | None = None
+        try:
+            escaped = clean.replace('"', " ")
+            response = self.session.get(
+                MUSICBRAINZ_RECORDING_URL,
+                params={
+                    "query": f'recording:"{escaped}"',
+                    "fmt": "json",
+                    "limit": str(MAX_IDENTITIES),
+                },
+                timeout=(4, 12),
+                allow_redirects=False,
+            )
+            if response.status_code != 200:
+                return ()
+            recordings = response.json().get("recordings", [])
+            found: dict[tuple[str, str], SongIdentity] = {}
+            for recording in recordings[:MAX_IDENTITIES]:
+                score = int(recording.get("score") or 0)
+                title = normalize_text(str(recording.get("title") or ""))[:300]
+                title_words = set(comparison_text(title).split())
+                exact = len(query_words & title_words)
+                if (
+                    score < 85
+                    or exact < 2
+                    or _name_similarity(clean, title) < 0.72
+                ):
+                    continue
+                artist_names = [
+                    normalize_text(str(credit.get("name") or ""))
+                    for credit in recording.get("artist-credit", [])[:8]
+                    if isinstance(credit, dict)
+                ]
+                artist = ", ".join(name for name in artist_names if name)[:300]
+                if not title or not artist:
+                    continue
+                key = (title.casefold(), artist.casefold())
+                found[key] = SongIdentity(
+                    title=title,
+                    artist=artist,
+                    matched_words=exact,
+                    exact_words=exact,
+                )
+            return tuple(
+                sorted(
+                    found.values(),
+                    key=lambda item: (-item.exact_words, item.artist.casefold()),
                 )[:MAX_IDENTITIES]
             )
         except (requests.RequestException, TypeError, ValueError, AttributeError):

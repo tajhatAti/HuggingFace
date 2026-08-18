@@ -299,6 +299,12 @@ class LyricsService:
             try:
                 filename_identities = title_search(filename_hint)
                 if not filename_identities:
+                    catalog_search = getattr(
+                        self.provider, "search_catalog_identities", None
+                    )
+                    if callable(catalog_search):
+                        filename_identities = catalog_search(filename_hint)
+                if not filename_identities:
                     lyric_search = getattr(self.provider, "search_identities", None)
                     if callable(lyric_search):
                         filename_identities = lyric_search(filename_hint)

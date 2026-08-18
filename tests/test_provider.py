@@ -142,6 +142,30 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(identities[0].artist, "Rabindranath Tagore")
         self.assertEqual(session.last_call[0], "https://genius.com/api/search/multi")
 
+    def test_musicbrainz_catalog_can_verify_title_and_artist(self):
+        response = FakeResponse(
+            payload={
+                "recordings": [
+                    {
+                        "score": 100,
+                        "title": "Amar Sonar Bangla",
+                        "artist-credit": [
+                            {"name": "Rabindranath Tagore"},
+                        ],
+                    }
+                ]
+            }
+        )
+        session = FakeSession(response)
+        identities = LrcLibClient(session=session).search_catalog_identities(
+            "amar sonar bangla"
+        )
+        self.assertEqual(identities[0].title, "Amar Sonar Bangla")
+        self.assertEqual(identities[0].artist, "Rabindranath Tagore")
+        self.assertEqual(
+            session.last_call[0], "https://musicbrainz.org/ws/2/recording/"
+        )
+
     def test_metadata_selection_checks_title_artist_duration_and_script(self):
         good = candidate()
         wrong_duration = candidate(record_id=2, duration_seconds=260.0)
