@@ -150,6 +150,7 @@ class CpuWhisperRecognizer:
 
     def __init__(self, model: Any) -> None:
         self.model = model
+        self.last_transcription_quality: float | None = None
 
     def preview(
         self,
@@ -291,6 +292,7 @@ class CpuWhisperRecognizer:
     ) -> tuple[str, tuple[TimedSegment, ...], str]:
         if sample_rate != 16_000:
             raise RecognitionError("CPU Whisper requires 16 kHz audio.")
+        self.last_transcription_quality = None
         language = LANGUAGE_CODES.get(language_label)
         try:
             generated, info = self.model.transcribe(
@@ -307,9 +309,11 @@ class CpuWhisperRecognizer:
             detected = language or normalize_text(
                 str(getattr(info, "language", "auto"))
             )
+            items = tuple(generated)
+            self.last_transcription_quality = _segment_quality(items)
             segments: list[TimedSegment] = []
             text_parts: list[str] = []
-            for item in generated:
+            for item in items:
                 start = max(0.0, float(item.start))
                 end = min(duration_seconds, max(start + 0.1, float(item.end)))
                 text = normalize_text(str(item.text or ""))

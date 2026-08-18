@@ -468,6 +468,11 @@ class LyricsService:
         bengali_expected = bengali_expected or detected_language == "bn" or contains_bengali(
             transcript
         )
+        acoustic_quality = getattr(self.recognizer, "last_transcription_quality", None)
+        if isinstance(acoustic_quality, (int, float)):
+            warnings.append(
+                f"Full-song AI acoustic quality diagnostic: {acoustic_quality:.3f}."
+            )
 
         # Step 4: richer full-song evidence gets one final identity and synced-lyrics search.
         match, confidence, full_identity = _search_from_ai_evidence(
