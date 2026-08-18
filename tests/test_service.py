@@ -86,7 +86,18 @@ class PreviewRecognizer(FakeRecognizer):
         )
 
 
+class InconsistentBengaliRecognizer(PreviewRecognizer):
+    def transcribe(self, samples, sample_rate, duration_seconds, language_label):
+        del samples, sample_rate, duration_seconds, language_label
+        text = "মাটির রোদে আঁকা নতুন দিনের খোঁজে সময়ের চাকা ঘুরে যায় বিধাতার স্পর্শে জাগা"
+        return text, (TimedSegment(1.0, 8.0, text),), "bn"
+
+
 class MixedScriptRecognizer(PreviewRecognizer):
+    def preview(self, samples, sample_rate, duration_seconds, language_label):
+        del samples, sample_rate, duration_seconds, language_label
+        return "মাটির রোদে আঁকা নতুন দিনের খোঁজে সময়ের চাকা", "bn", 0.9
+
     def transcribe(self, samples, sample_rate, duration_seconds, language_label):
         del samples, sample_rate, duration_seconds, language_label
         text = (
@@ -203,6 +214,12 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(provider.filename_query, "amar sonar bangla")
         self.assertEqual(result.title, "Amar Sonar Bangla")
         self.assertEqual(result.artist, "Rabindranath Tagore")
+
+    def test_inconsistent_script_clean_bengali_is_rejected(self):
+        with self.assertRaisesRegex(LyricsServiceError, "Independent Bengali decodes"):
+            LyricsService(
+                provider=FakeProvider(), recognizer=InconsistentBengaliRecognizer()
+            ).transcribe(self.audio)
 
     def test_mixed_script_bengali_gibberish_is_rejected(self):
         with self.assertRaisesRegex(LyricsServiceError, "mixed-script or Banglish"):

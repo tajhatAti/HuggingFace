@@ -205,7 +205,7 @@ with gr.Blocks(title="Lyr Online", analytics_enabled=False) as demo:
     gr.HTML(
         """<section id="hero"><div class="kicker">Online song → synced lyrics</div>
 <h1>Lyr Online.</h1>
-<p>Upload one song. Lyr detects its language, searches verified synchronized lyrics using AI evidence and a bounded recording fingerprint, then listens to the full song only when retrieval fails. Unusable mixed-script বাংলা output is rejected.</p></section>"""
+<p>Upload one song. Lyr detects its language, searches verified synchronized lyrics using AI evidence and a bounded recording fingerprint, then listens to the full song only when retrieval fails. Low-confidence, inconsistent, or mixed-script বাংলা output is rejected.</p></section>"""
     )
     with gr.Column(elem_id="work"):
         gr.Markdown("### 1 · Choose a song")

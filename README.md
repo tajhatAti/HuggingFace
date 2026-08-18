@@ -24,7 +24,7 @@ The former GitHub repository explorer has been removed. This Space now does one 
 4. use preview words, then a bounded audio fingerprint, to identify title/artist;
 5. verify that identity against synchronized LRCLIB lyrics before any full transcription;
 6. listen to the full song only when every identity and synchronized search misses;
-7. reject mixed-script/Banglish garbage instead of saving it as successful lyrics;
+7. reject low-confidence, inconsistent, mixed-script, or Banglish fallback output instead of saving it as successful lyrics;
 8. return identified metadata, plain lyrics, synchronized LRC, structured data and download.
 
 ## Reviewed Lyr branches

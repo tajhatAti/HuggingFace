@@ -53,6 +53,8 @@ _LANGUAGE_LABEL_BY_CODE = {
     "hi": "Hindi",
     "ur": "Urdu",
 }
+BENGALI_MIN_ACOUSTIC_QUALITY = -0.55
+BENGALI_MIN_DECODE_AGREEMENT = 0.50
 _FILENAME_NOISE = {
     "audio",
     "copy",
@@ -477,19 +479,11 @@ class LyricsService:
             transcript
         )
         acoustic_quality = getattr(self.recognizer, "last_transcription_quality", None)
-        if isinstance(acoustic_quality, (int, float)):
-            warnings.append(
-                f"Full-song AI acoustic quality diagnostic: {acoustic_quality:.3f}."
-            )
         preview_agreement = (
             _bengali_preview_agreement(preview_text, transcript)
             if bengali_expected
             else None
         )
-        if preview_agreement is not None:
-            warnings.append(
-                f"Bengali independent-decode agreement diagnostic: {preview_agreement:.0%}."
-            )
 
         # Step 4: richer full-song evidence gets one final identity and synced-lyrics search.
         match, confidence, full_identity = _search_from_ai_evidence(
@@ -514,6 +508,22 @@ class LyricsService:
                 warnings=tuple(dict.fromkeys(warnings)),
             )
 
+        if bengali_expected and (
+            (
+                isinstance(acoustic_quality, (int, float))
+                and acoustic_quality < BENGALI_MIN_ACOUSTIC_QUALITY
+            )
+            or (
+                preview_agreement is not None
+                and preview_agreement < BENGALI_MIN_DECODE_AGREEMENT
+            )
+        ):
+            raise LyricsServiceError(
+                "AI could not produce trustworthy Bengali lyrics for this recording. "
+                "Independent Bengali decodes disagreed or the acoustic evidence was too weak. "
+                "No verified synchronized match was found, so the unreliable output was "
+                "rejected instead of being saved as lyrics."
+            )
         if bengali_expected and not _bengali_fallback_is_usable(transcript):
             raise LyricsServiceError(
                 "AI could not produce trustworthy Bengali-script lyrics for this recording. "
