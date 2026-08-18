@@ -82,6 +82,14 @@ def _filename_title_hint(original_name: str) -> str:
     return " ".join(useful[:16]) if len(useful) >= 2 else ""
 
 
+def _bengali_preview_agreement(preview: str, transcript: str) -> float | None:
+    preview_words = set(re.findall(r"[\u0980-\u09ff]{2,}", preview))
+    transcript_words = set(re.findall(r"[\u0980-\u09ff]{2,}", transcript))
+    if len(preview_words) < 3 or not transcript_words:
+        return None
+    return len(preview_words & transcript_words) / len(preview_words)
+
+
 def _bengali_fallback_is_usable(transcript: str) -> bool:
     letters = [character for character in transcript if character.isalpha()]
     bengali_letters = [
@@ -472,6 +480,15 @@ class LyricsService:
         if isinstance(acoustic_quality, (int, float)):
             warnings.append(
                 f"Full-song AI acoustic quality diagnostic: {acoustic_quality:.3f}."
+            )
+        preview_agreement = (
+            _bengali_preview_agreement(preview_text, transcript)
+            if bengali_expected
+            else None
+        )
+        if preview_agreement is not None:
+            warnings.append(
+                f"Bengali independent-decode agreement diagnostic: {preview_agreement:.0%}."
             )
 
         # Step 4: richer full-song evidence gets one final identity and synced-lyrics search.
