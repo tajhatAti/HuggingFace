@@ -17,6 +17,7 @@ TEST_AUDIO_URL = (
     "Amar_Sonar_Bangla_-_official_vocal_music_of_the_"
     "National_anthem_of_Bangladesh.ogg"
 )
+ITUNES_SEARCH_URL = "https://itunes.apple.com/search"
 USER_AGENT = "Lyr-Deployment-Smoke/1.0"
 
 
@@ -83,11 +84,11 @@ def _request(method: str, url: str, **kwargs: Any) -> requests.Response:
     raise SmokeTestError(f"Request failed after retries: {last_error}")
 
 
-def _upload_audio(audio: bytes) -> str:
+def _upload_audio(audio: bytes, *, filename: str, content_type: str) -> str:
     response = _request(
         "POST",
         f"{SPACE_URL}/gradio_api/upload",
-        files={"files": ("amar-sonar-bangla-public-domain.ogg", audio, "audio/ogg")},
+        files={"files": (filename, audio, content_type)},
     )
     payload = response.json()
     if not isinstance(payload, list) or not payload:
@@ -152,12 +153,85 @@ def _await_transcription(event_id: str) -> tuple[str, dict[str, Any]]:
     raise SmokeTestError("Transcription stream ended without a completion event.")
 
 
+def _run_matir_roud_identity_smoke() -> dict[str, Any]:
+    """Reproduce the owner's random-filename Bengali song failure with real audio."""
+
+    search_response = _request(
+        "GET",
+        ITUNES_SEARCH_URL,
+        params={
+            "term": "Matir Roud Aftermath",
+            "entity": "song",
+            "limit": "5",
+        },
+        timeout=(30, 90),
+    )
+    results = search_response.json().get("results", [])
+    track = next(
+        (
+            item
+            for item in results
+            if str(item.get("trackName") or "").casefold() == "matir roud"
+            and "aftermath" in str(item.get("artistName") or "").casefold()
+        ),
+        None,
+    )
+    if not isinstance(track, dict):
+        raise SmokeTestError("iTunes did not return the Matir Roud test recording.")
+    preview_url = str(track.get("previewUrl") or "")
+    if not preview_url.startswith("https://audio-ssl.itunes.apple.com/"):
+        raise SmokeTestError("iTunes returned an untrusted preview URL.")
+    audio_response = _request("GET", preview_url, timeout=(30, 90))
+    if not 50_000 <= len(audio_response.content) <= 5_000_000:
+        raise SmokeTestError("Matir Roud preview audio had an unexpected size.")
+    path = _upload_audio(
+        audio_response.content,
+        filename="292nsksksk.m4a",
+        content_type="audio/mp4",
+    )
+    event_id = _start_transcription(path)
+    lrc, structured = _await_transcription(event_id)
+    title = str(structured.get("title") or "")
+    artist = str(structured.get("artist") or "")
+    if (
+        not structured.get("ok")
+        or structured.get("source") != "lrclib_audio_match"
+        or title.casefold() != "matir roud"
+        or "aftermath" not in artist.casefold()
+        or structured.get("language") != "bn"
+        or "বিধাতার স্পর্শে জাগা" not in lrc
+        or "সময়ের চাকা" not in lrc
+        or "মাটির রোদে আঁকা" not in lrc
+    ):
+        raise SmokeTestError(
+            "Random-filename Matir Roud was not identified and replaced with verified "
+            "synchronized Bengali lyrics: "
+            f"title={title!r}, artist={artist!r}, source={structured.get('source')!r}, "
+            f"language={structured.get('language')!r}, "
+            f"warnings={structured.get('warnings')!r}, lrc={lrc[:240]!r}."
+        )
+    return {
+        "title": title,
+        "artist": artist,
+        "source": structured.get("source"),
+        "language": structured.get("language"),
+        "lines": len(structured.get("lines") or []),
+        "uploaded_as": "292nsksksk.m4a",
+        "audio_bytes": len(audio_response.content),
+        "lrc_excerpt": lrc[:220],
+    }
+
+
 def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
     revision = wait_for_space(api)
     audio_response = _request("GET", TEST_AUDIO_URL, timeout=(30, 90))
     if not 10_000 <= len(audio_response.content) <= 5_000_000:
         raise SmokeTestError("Public-domain test audio had an unexpected size.")
-    path = _upload_audio(audio_response.content)
+    path = _upload_audio(
+        audio_response.content,
+        filename="amar-sonar-bangla-public-domain.ogg",
+        content_type="audio/ogg",
+    )
     event_id = _start_transcription(path)
     lrc, structured = _await_transcription(event_id)
     if not structured.get("ok") or not lrc or "[" not in lrc:
@@ -205,6 +279,7 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
             f"Bengali characters={bengali_characters}, lines={line_count}, "
             f"replacement characters={replacement_characters}."
         )
+    matir_roud_result = _run_matir_roud_identity_smoke()
     result = {
         "revision": revision,
         "source": structured.get("source"),
@@ -216,6 +291,7 @@ def run_deployed_smoke_test(api: HfApi) -> dict[str, Any]:
         "audio_bytes": len(audio_response.content),
         "warnings": structured.get("warnings"),
         "lrc_excerpt": lrc[:360],
+        "random_filename_song": matir_roud_result,
     }
     print(f"Deployed upload/transcription smoke passed: {json.dumps(result)}")
     return result

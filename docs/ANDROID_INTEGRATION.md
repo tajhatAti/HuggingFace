@@ -19,8 +19,8 @@ For each Smart Lyrics request it:
 1. calls `/lookup_lyrics` with title, artist, and duration;
 2. immediately returns a strict synchronized LRCLIB match when available;
 3. otherwise uploads the selected audio through `/gradio_api/upload`;
-4. calls `/transcribe_song`; the server previews three regions, detects language, identifies title/artist and searches again before any full-song pass;
-5. forces Bengali decoding after automatic `bn` detection, preventing avoidable Banglish output;
+4. calls `/transcribe_song`; the server previews three regions, detects language, then uses preview evidence or a bounded audio fingerprint to identify title/artist and search again before any full-song pass;
+5. forces Bengali decoding after automatic `bn` detection and rejects clearly mixed-script/Banglish fallback output;
 6. validates that the structured result is successful and contains parseable LRC;
 7. returns it through the existing `OnDeviceAiLyricsManager` listener/state contract, allowing the player and editor to adopt the result without architectural regressions.
 

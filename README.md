@@ -21,10 +21,11 @@ The former GitHub repository explorer has been removed. This Space now does one 
 1. accept one song and verify its supplied title/artist online;
 2. run one short AI preview assembled from three vocal regions;
 3. detect the language first and force বাংলা script when Bengali is detected;
-4. use preview words to identify title/artist and search synchronized lyrics;
-5. listen to the full song only when the identity search has no trustworthy match;
-6. repeat the synchronized search with richer evidence, otherwise return editable AI LRC;
-7. return identified metadata, plain lyrics, synchronized LRC, structured data and download.
+4. use preview words, then a bounded audio fingerprint, to identify title/artist;
+5. verify that identity against synchronized LRCLIB lyrics before any full transcription;
+6. listen to the full song only when every identity and synchronized search misses;
+7. reject mixed-script/Banglish garbage instead of saving it as successful lyrics;
+8. return identified metadata, plain lyrics, synchronized LRC, structured data and download.
 
 ## Reviewed Lyr branches
 

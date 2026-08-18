@@ -16,6 +16,7 @@ from faster_whisper import WhisperModel
 
 from lyr_service.audio import MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS, load_audio
 from lyr_service.domain import LyricsDocument
+from lyr_service.identifier import ShazamAudioIdentifier
 from lyr_service.provider import LrcLibClient
 from lyr_service.recognizer import CpuWhisperRecognizer, LANGUAGE_CODES
 from lyr_service.service import LyricsService, LyricsServiceError
@@ -32,6 +33,7 @@ MODEL_ID = os.getenv(
 CPU_THREADS = max(1, min(8, os.cpu_count() or 2))
 CPU_MODEL = None
 CPU_RECOGNIZER = None
+AUDIO_IDENTIFIER = ShazamAudioIdentifier()
 MODEL_ERROR = ""
 OUTPUT_ROOT = Path(os.getenv("LYR_OUTPUT_DIRECTORY", "/tmp/lyr-online"))
 OUTPUT_TTL_SECONDS = 2 * 60 * 60
@@ -159,7 +161,9 @@ def transcribe_song_ui(audio_path: str, title: str, artist: str, language_label:
     try:
         audio = load_audio(audio_path)
         document = LyricsService(
-            provider=LrcLibClient(), recognizer=CPU_RECOGNIZER
+            provider=LrcLibClient(),
+            recognizer=CPU_RECOGNIZER,
+            identifier=AUDIO_IDENTIFIER,
         ).transcribe(
             audio,
             title=title or "",
@@ -201,7 +205,7 @@ with gr.Blocks(title="Lyr Online", analytics_enabled=False) as demo:
     gr.HTML(
         """<section id="hero"><div class="kicker">Online song → synced lyrics</div>
 <h1>Lyr Online.</h1>
-<p>Upload one song. Lyr verifies metadata, uses an AI preview to detect language and identify title/artist, searches synchronized lyrics, then listens to the full song only when every online match fails. বাংলা script is forced after Bengali detection.</p></section>"""
+<p>Upload one song. Lyr detects its language, searches verified synchronized lyrics using AI evidence and a bounded recording fingerprint, then listens to the full song only when retrieval fails. Unusable mixed-script বাংলা output is rejected.</p></section>"""
     )
     with gr.Column(elem_id="work"):
         gr.Markdown("### 1 · Choose a song")

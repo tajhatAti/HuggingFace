@@ -34,6 +34,15 @@ class Recognizer(Protocol):
     ) -> tuple[str, tuple[TimedSegment, ...], str]: ...
 
 
+class SongIdentifier(Protocol):
+    def identify(
+        self,
+        samples: Any,
+        sample_rate: int,
+        duration_seconds: float,
+    ) -> SongIdentity | None: ...
+
+
 class LyricsServiceError(RuntimeError):
     pass
 
@@ -71,6 +80,30 @@ def _filename_title_hint(original_name: str) -> str:
         and not re.fullmatch(r"[0-9a-fA-F]{8,}", word)
     ]
     return " ".join(useful[:16]) if len(useful) >= 2 else ""
+
+
+def _bengali_fallback_is_usable(transcript: str) -> bool:
+    letters = [character for character in transcript if character.isalpha()]
+    bengali_letters = [
+        character for character in letters if "\u0980" <= character <= "\u09ff"
+    ]
+    foreign_letters = [
+        character for character in letters if not "\u0980" <= character <= "\u09ff"
+    ]
+    # A few Latin letters can legitimately occur in a Bengali lyric, but unrelated
+    # Arabic/Cyrillic/CJK/etc. scripts are a strong hallucination signal.
+    foreign_non_latin = [
+        character
+        for character in foreign_letters
+        if not "\u0041" <= character <= "\u024f"
+    ]
+    if (
+        len(bengali_letters) < 30
+        or len(bengali_letters) / max(1, len(letters)) < 0.85
+        or len(foreign_non_latin) > 2
+    ):
+        return False
+    return re.search(r"(.)\1{5,}", transcript) is None
 
 
 def _provider_document(
@@ -162,9 +195,11 @@ class LyricsService:
         self,
         provider: LrcLibClient | None = None,
         recognizer: Recognizer | None = None,
+        identifier: SongIdentifier | None = None,
     ) -> None:
         self.provider = provider or LrcLibClient()
         self.recognizer = recognizer
+        self.identifier = identifier
 
     def lookup(
         self,
@@ -291,6 +326,61 @@ class LyricsService:
                     warnings=tuple(dict.fromkeys(warnings)),
                 )
 
+        # Fingerprinting sees the recording rather than trusting a random filename or
+        # error-prone sung-word transcript. It runs only after the required AI preview,
+        # and an exact LRCLIB verification is still required before community lyrics win.
+        if self.identifier is not None:
+            try:
+                fingerprinted = self.identifier.identify(
+                    audio.samples,
+                    audio.sample_rate,
+                    audio.duration_seconds,
+                )
+                if fingerprinted is not None:
+                    identified = fingerprinted
+                    warnings.append(
+                        "Audio fingerprint identified the recording online: "
+                        f"{identified.title} — {identified.artist}."
+                    )
+                    identity_duration = (
+                        audio.duration_seconds if audio.duration_seconds >= 60 else 0.0
+                    )
+                    candidates = self.provider.search_metadata(
+                        identified.title,
+                        identified.artist,
+                        identity_duration,
+                    )
+                    match, confidence = choose_metadata_candidate(
+                        candidates,
+                        title=identified.title,
+                        artist=identified.artist,
+                        duration_seconds=identity_duration,
+                    )
+                    if (
+                        match is not None
+                        and bengali_expected
+                        and not contains_bengali(match.synced_lyrics)
+                    ):
+                        match = None
+                    if match is not None:
+                        return _provider_document(
+                            match,
+                            source="lrclib_audio_match",
+                            confidence=confidence,
+                            language=(
+                                "bn"
+                                if contains_bengali(match.synced_lyrics)
+                                else detected_language
+                            ),
+                            warnings=tuple(dict.fromkeys(warnings)),
+                        )
+            except LyricsProviderError as exc:
+                warnings.append(str(exc))
+            except Exception:
+                warnings.append(
+                    "Audio fingerprint lookup was unavailable; continuing with AI evidence."
+                )
+
         # A descriptive local filename is only a hint: verify it online after the AI
         # preview, then use the verified identity for one more synchronized search.
         filename_hint = _filename_title_hint(audio.original_name)
@@ -339,7 +429,11 @@ class LyricsService:
                             match,
                             source="lrclib_audio_match",
                             confidence=confidence,
-                            language=("bn" if bengali_expected else detected_language),
+                            language=(
+                                "bn"
+                                if contains_bengali(match.synced_lyrics)
+                                else detected_language
+                            ),
                             warnings=tuple(dict.fromkeys(warnings)),
                         )
             except LyricsProviderError as exc:
@@ -392,6 +486,12 @@ class LyricsService:
                 warnings=tuple(dict.fromkeys(warnings)),
             )
 
+        if bengali_expected and not _bengali_fallback_is_usable(transcript):
+            raise LyricsServiceError(
+                "AI could not produce trustworthy Bengali-script lyrics for this recording. "
+                "No verified synchronized match was found, so mixed-script or Banglish "
+                "output was rejected instead of being saved as lyrics."
+            )
         lines = segments_to_lines(segments, audio.duration_seconds)
         if not lines:
             raise LyricsServiceError(

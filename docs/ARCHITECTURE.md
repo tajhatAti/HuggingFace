@@ -17,16 +17,18 @@ Android app or minimal Space UI
             ├── AI preview from three short vocal regions
             ├── detect language; force bn for native বাংলা output
             ├── identify title/artist from preview evidence
-            ├── strict LRCLIB synchronized search
-            ├── full-song CPU AI only after the search misses
-            └── second verified search or AI-timed LRC + metadata + JSON
+            ├── bounded audio fingerprint when preview words do not identify it
+            ├── strict LRCLIB synchronized search and identity verification
+            ├── full-song CPU AI only after every retrieval path misses
+            └── second verified search or quality-gated AI LRC + metadata + JSON
 ```
 
 ## Components
 
 - `app.py` — quota-free CPU model lifecycle, minimal Gradio interface and public API callbacks.
 - `lyr_service/audio.py` — bounded decode, float conversion and 16 kHz mono resampling.
-- `lyr_service/provider.py` — fixed-host LRCLIB requests, candidate mapping and conservative scoring.
+- `lyr_service/provider.py` — fixed-host LRCLIB/Genius/MusicBrainz requests, candidate mapping and conservative scoring.
+- `lyr_service/identifier.py` — isolated bounded Shazam fingerprint adapter.
 - `lyr_service/recognizer.py` — Faster-Whisper and test-adapter output mapping.
 - `lyr_service/lyrics.py` — Unicode cleanup, phrase splitting, explicit-end LRC serialization/parsing.
 - `lyr_service/service.py` — retrieval-first orchestration.
@@ -34,7 +36,7 @@ Android app or minimal Space UI
 
 ## Why quota-free Faster-Whisper large-v3-turbo
 
-`dropbox-dash/faster-whisper-large-v3-turbo` runs through CTranslate2 int8 on the Space's free CPU. It uses more of the available 16 GB RAM and can take longer than the small model, but its stronger multilingual recognition is necessary for Bengali songs while remaining independent of daily ZeroGPU allowances. All available CPU threads are used, one transcription runs at a time, and RAM holds the model/audio safely but does not replace CPU compute. A short preview detects Bengali and identifies the song before full listening; native bn plus a Bengali-script safeguard prevents Hindi/Punjabi glyph drift and Latin-script Banglish output.
+`dropbox-dash/faster-whisper-large-v3-turbo` runs through CTranslate2 int8 on the Space's free CPU. It uses more of the available 16 GB RAM and can take longer than the small model, but its stronger multilingual recognition is necessary for Bengali songs while remaining independent of daily ZeroGPU allowances. All available CPU threads are used, one transcription runs at a time, and RAM holds the model/audio safely but does not replace CPU compute. A short preview detects Bengali and attempts to identify the song before full listening; an isolated fingerprint fallback handles random filenames when words are insufficient. Native `bn` plus a Bengali-script usability gate rejects short, repetitive, Latin-heavy, or mixed-script fallback output instead of presenting it as successful lyrics.
 
 ## Lyr compatibility
 

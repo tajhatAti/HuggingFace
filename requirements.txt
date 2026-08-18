@@ -1,3 +1,4 @@
 # Gradio, NumPy and huggingface_hub are managed by the Space runtime.
 faster-whisper>=1.2.1,<2.0.0
 requests>=2.32.0,<3.0.0
+shazamio==0.8.1
